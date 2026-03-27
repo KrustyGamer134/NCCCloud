@@ -970,6 +970,12 @@ function InstanceConfigTab({
         </div>
       )}
 
+      {initialInstanceId && !requestedInstance && instances.length > 0 && (
+        <div className="mb-6 rounded-lg border border-yellow-800 bg-yellow-950/40 px-4 py-3 text-sm text-yellow-200">
+          The requested instance could not be found. Select another server instance to continue.
+        </div>
+      )}
+
       {instances.length === 0 ? (
         <p className="text-gray-500 text-sm">No instances found.</p>
       ) : (
