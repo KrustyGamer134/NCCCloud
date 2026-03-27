@@ -147,6 +147,13 @@ export default function InstancesPage() {
   const selectedPluginMaps = selectedPlugin?.provisioning?.maps ?? [];
   const managedCreateRequiresAgent = selectedPluginMaps.length > 0;
   const connectedModalAgents = modalAgents.filter((agent) => agent.is_connected);
+  const createDisabled =
+    addBusy ||
+    modalLoading ||
+    !form.display_name.trim() ||
+    !form.plugin_id ||
+    (selectedPluginMaps.length > 0 && !form.map) ||
+    (managedCreateRequiresAgent && !form.agent_id);
 
   function buildInitialForm(plugs: PluginSummary[], agts: Agent[]) {
     const firstPlugin = plugs[0];
@@ -815,7 +822,7 @@ export default function InstancesPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={addBusy || modalLoading}
+                  disabled={createDisabled}
                   className="px-4 py-2 rounded text-sm bg-blue-700 hover:bg-blue-600 text-white border border-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {addBusy ? "Creating…" : "Create"}
