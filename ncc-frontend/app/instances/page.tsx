@@ -862,7 +862,11 @@ export default function InstancesPage() {
                   disabled={createDisabled}
                   className="px-4 py-2 rounded text-sm bg-blue-700 hover:bg-blue-600 text-white border border-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {addBusy ? "Creating…" : "Create"}
+                  {addBusy
+                    ? "Creating…"
+                    : managedCreateRequiresAgent
+                    ? "Create Managed Server"
+                    : "Create"}
                 </button>
               </div>
             </form>
