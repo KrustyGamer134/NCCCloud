@@ -1,5 +1,5 @@
-"""
-Tests for core.plan_limits — BILL-001.
+﻿"""
+Tests for core.plan_limits â€” BILL-001.
 
 Two layers:
 
@@ -20,11 +20,16 @@ the pro/free filter logic end-to-end with real plugin_catalog rows.
 """
 from __future__ import annotations
 
+import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://ncc_app:changeme@localhost:5432/ncc_test")
+os.environ.setdefault("CLERK_JWKS_URL", "https://example.test/.well-known/jwks.json")
+os.environ.setdefault("SECRET_KEY", "test-secret")
+os.environ.setdefault("NCC_CORE_PATH", "E:\\NCCCloud")
 
 from core.plan_limits import (
     PLAN_LIMITS,
@@ -271,7 +276,7 @@ async def test_agent_limit_error_shape():
 
 
 # ===========================================================================
-# Integration tests — real PostgreSQL, real rows, real SQL queries
+# Integration tests â€” real PostgreSQL, real rows, real SQL queries
 # ===========================================================================
 # These tests use the ``db_session`` fixture from tests/conftest.py.
 # They are skipped automatically when DATABASE_URL_TEST is unreachable.
@@ -347,11 +352,11 @@ async def _make_plugin(
 
 
 # ---------------------------------------------------------------------------
-# Instance limit — integration
+# Instance limit â€” integration
 # ---------------------------------------------------------------------------
 
 async def test_integ_free_at_instance_limit_raises_402(db_session):
-    """free tenant with 1 instance (at limit) → 402."""
+    """free tenant with 1 instance (at limit) â†’ 402."""
     t = await _make_tenant(db_session, "free")
     await _make_instances(db_session, t.tenant_id, count=1)
 
@@ -366,14 +371,14 @@ async def test_integ_free_at_instance_limit_raises_402(db_session):
 
 
 async def test_integ_free_under_instance_limit_passes(db_session):
-    """free tenant with 0 instances (under limit) → passes."""
+    """free tenant with 0 instances (under limit) â†’ passes."""
     t = await _make_tenant(db_session, "free")
-    # No instances inserted — count is 0, limit is 1.
+    # No instances inserted â€” count is 0, limit is 1.
     await check_instance_limit(db_session, str(t.tenant_id), "free")
 
 
 async def test_integ_basic_at_instance_limit_raises_402(db_session):
-    """basic tenant with 3 instances (at limit) → 402."""
+    """basic tenant with 3 instances (at limit) â†’ 402."""
     t = await _make_tenant(db_session, "basic")
     await _make_instances(db_session, t.tenant_id, count=3)
 
@@ -387,7 +392,7 @@ async def test_integ_basic_at_instance_limit_raises_402(db_session):
 
 
 async def test_integ_basic_under_instance_limit_passes(db_session):
-    """basic tenant with 2 instances (under limit of 3) → passes."""
+    """basic tenant with 2 instances (under limit of 3) â†’ passes."""
     t = await _make_tenant(db_session, "basic")
     await _make_instances(db_session, t.tenant_id, count=2)
     await check_instance_limit(db_session, str(t.tenant_id), "basic")
@@ -402,11 +407,11 @@ async def test_integ_pro_never_blocked_on_instances(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Agent limit — integration
+# Agent limit â€” integration
 # ---------------------------------------------------------------------------
 
 async def test_integ_free_at_agent_limit_raises_402(db_session):
-    """free tenant with 1 active agent (at limit) → 402."""
+    """free tenant with 1 active agent (at limit) â†’ 402."""
     t = await _make_tenant(db_session, "free")
     await _make_agents(db_session, t.tenant_id, count=1)
 
@@ -421,7 +426,7 @@ async def test_integ_free_at_agent_limit_raises_402(db_session):
 
 
 async def test_integ_free_revoked_agent_not_counted(db_session):
-    """A revoked agent does not consume a slot — free tenant can still register."""
+    """A revoked agent does not consume a slot â€” free tenant can still register."""
     t = await _make_tenant(db_session, "free")
     # One revoked agent: should not count toward the limit.
     await _make_agents(db_session, t.tenant_id, count=1, revoked=True)
@@ -437,7 +442,7 @@ async def test_integ_pro_never_blocked_on_agents(db_session):
 
 
 # ---------------------------------------------------------------------------
-# Plugin filter — integration
+# Plugin filter â€” integration
 # ---------------------------------------------------------------------------
 
 async def test_integ_plugins_free_gets_subset_pro_gets_all(db_session):
@@ -469,7 +474,7 @@ async def test_integ_plugins_free_gets_subset_pro_gets_all(db_session):
         available_in_plans=["basic", "pro"],  # NOT available to free
     )
 
-    # ── Free tenant: should only see the first plugin ───────────────────
+    # â”€â”€ Free tenant: should only see the first plugin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     free_result = await list_plugins(
         tenant_id=str(free_tenant.tenant_id), db=db_session
     )
@@ -480,7 +485,7 @@ async def test_integ_plugins_free_gets_subset_pro_gets_all(db_session):
         "free tenant must NOT see the premium-only plugin"
     )
 
-    # ── Pro tenant: must see both plugins ────────────────────────────────
+    # â”€â”€ Pro tenant: must see both plugins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     pro_result = await list_plugins(
         tenant_id=str(pro_tenant.tenant_id), db=db_session
     )
@@ -514,3 +519,37 @@ async def test_integ_pro_sees_plugin_not_in_any_plan_list(db_session):
     assert f"unlisted_test_{uid}" in pro_ids, (
         "pro tenant must see plugins even when available_in_plans is empty"
     )
+
+
+@pytest.mark.asyncio
+async def test_put_plugin_settings_preserves_provisioning_metadata():
+    from api.routes.settings import PluginSettingsBody, put_plugin_settings
+
+    plugin = MagicMock()
+    plugin.plugin_id = "ark_survival_ascended"
+    plugin.plugin_json = {
+        "maps": {"TheIsland_WP": {"display_name": "The Island"}},
+        "server_settings": {"map": {"value": "TheIsland_WP"}},
+        "display_name": "ARK: Survival Ascended",
+        "default_game_port_start": 7777,
+    }
+
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = plugin
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=result)
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    response = await put_plugin_settings(
+        plugin_name="ark_survival_ascended",
+        body=PluginSettingsBody(plugin_json={"default_game_port_start": 7787}),
+        tenant_id=_tenant_id(),
+        db=db,
+    )
+
+    assert response.plugin_json["default_game_port_start"] == 7787
+    assert response.plugin_json["maps"] == {"TheIsland_WP": {"display_name": "The Island"}}
+    assert response.plugin_json["server_settings"] == {"map": {"value": "TheIsland_WP"}}
+
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import uuid
 
@@ -130,7 +130,10 @@ async def put_plugin_settings(
             status_code=404,
             detail={"error": "Plugin not found", "code": "NOT_FOUND"},
         )
-    plugin.plugin_json = body.plugin_json
+    existing_json = dict(plugin.plugin_json or {})
+    next_json = dict(body.plugin_json or {})
+    existing_json.update(next_json)
+    plugin.plugin_json = existing_json
     db.add(plugin)
     await db.flush()
     return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin.plugin_json)
@@ -285,3 +288,4 @@ async def put_instance_config(
         config_json=inst.config_json,
         apply_result=apply_result,
     )
+
