@@ -493,6 +493,14 @@ export default function InstancesPage() {
               Start with <span className="text-white">Add Server</span> for the ARK managed path.
               Use <span className="text-white">Discover Servers</span> later for import.
             </p>
+            <div className="mt-4">
+              <button
+                onClick={openModal}
+                className="text-sm bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded border border-blue-600 transition-colors"
+              >
+                Add Managed Server
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-gray-800 overflow-hidden">
