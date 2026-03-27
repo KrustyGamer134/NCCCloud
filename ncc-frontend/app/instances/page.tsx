@@ -490,6 +490,7 @@ export default function InstancesPage() {
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Name</th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Plugin</th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Status</th>
+                  <th className="text-left px-4 py-3 text-gray-400 font-medium">Install</th>
                   <th className="text-left px-4 py-3 text-gray-400 font-medium">Agent</th>
                   <th className="text-right px-4 py-3 text-gray-400 font-medium">Actions</th>
                 </tr>
@@ -520,6 +521,9 @@ export default function InstancesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={inst.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={inst.install_status} />
                       </td>
                       <td className="px-4 py-3">
                         <AgentBadge online={inst.agent_online} />
