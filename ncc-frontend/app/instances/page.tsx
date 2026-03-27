@@ -807,9 +807,13 @@ export default function InstancesPage() {
                     >
                       <option value="">— None —</option>
                       {modalAgents.map((a) => (
-                        <option key={a.agent_id} value={a.agent_id}>
+                        <option
+                          key={a.agent_id}
+                          value={a.agent_id}
+                          disabled={managedCreateRequiresAgent && !a.is_connected}
+                        >
                           {a.machine_name}
-                          {a.is_connected ? " ●" : " ○"}
+                          {a.is_connected ? " ● online" : " ○ offline"}
                         </option>
                       ))}
                     </select>
