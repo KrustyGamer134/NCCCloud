@@ -9,6 +9,7 @@ import {
   discoverInstances,
   fetchAgents,
   fetchPlugins,
+  type PluginSummary,
 } from "../lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
@@ -28,6 +29,10 @@ interface Instance {
 interface Plugin {
   plugin_id: string;
   display_name: string;
+  provisioning?: {
+    default_map?: string;
+    maps?: Array<{ id: string; display_name: string }>;
+  } | null;
 }
 
 interface Agent {
@@ -38,7 +43,7 @@ interface Agent {
 
 type Action = "start" | "stop" | "restart";
 
-const EMPTY_FORM = { display_name: "", plugin_id: "", agent_id: "" };
+const EMPTY_FORM = { display_name: "", plugin_id: "", agent_id: "", map: "" };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Small display components
@@ -136,6 +141,33 @@ export default function InstancesPage() {
   // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const selectedPlugin = modalPlugins.find((plugin) => plugin.plugin_id === form.plugin_id);
+  const selectedPluginMaps = selectedPlugin?.provisioning?.maps ?? [];
+
+  function buildInitialForm(plugs: PluginSummary[], agts: Agent[]) {
+    const firstPlugin = plugs[0];
+    return {
+      ...EMPTY_FORM,
+      plugin_id: firstPlugin?.plugin_id ?? "",
+      agent_id: agts[0]?.agent_id ?? "",
+      map:
+        firstPlugin?.provisioning?.default_map ??
+        firstPlugin?.provisioning?.maps?.[0]?.id ??
+        "",
+    };
+  }
+
+  function handlePluginChange(pluginId: string) {
+    const plugin = modalPlugins.find((item) => item.plugin_id === pluginId);
+    const nextMap =
+      plugin?.provisioning?.default_map ?? plugin?.provisioning?.maps?.[0]?.id ?? "";
+    setForm((current) => ({
+      ...current,
+      plugin_id: pluginId,
+      map: nextMap,
+    }));
+  }
+
   // ── Fetch instances ────────────────────────────────────────────────────────
   const loadInstances = useCallback(async () => {
     try {
@@ -209,11 +241,7 @@ export default function InstancesPage() {
       setModalPlugins(plugs);
       setModalAgents(agts);
       // Pre-select first options
-      setForm((f) => ({
-        ...f,
-        plugin_id: plugs[0]?.plugin_id ?? "",
-        agent_id: agts[0]?.agent_id ?? "",
-      }));
+      setForm(buildInitialForm(plugs, agts));
     } catch (e: any) {
       setAddError(e.message ?? "Failed to load plugins/agents");
     } finally {
@@ -232,6 +260,10 @@ export default function InstancesPage() {
       setAddError("Please select a plugin.");
       return;
     }
+    if (selectedPluginMaps.length > 0 && !form.map) {
+      setAddError("Please select a map.");
+      return;
+    }
     setAddBusy(true);
     setAddError(null);
     try {
@@ -240,6 +272,7 @@ export default function InstancesPage() {
         display_name: form.display_name.trim(),
         plugin_id: form.plugin_id,
         agent_id: form.agent_id || undefined,
+        config_json: form.map ? { map: form.map } : undefined,
       });
       setShowModal(false);
       setForm(EMPTY_FORM);
@@ -692,9 +725,7 @@ export default function InstancesPage() {
                     <label className="block text-sm text-gray-400 mb-1">Plugin</label>
                     <select
                       value={form.plugin_id}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, plugin_id: e.target.value }))
-                      }
+                      onChange={(e) => handlePluginChange(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                     >
                       {modalPlugins.length === 0 && (
@@ -707,6 +738,28 @@ export default function InstancesPage() {
                       ))}
                     </select>
                   </div>
+
+                  {selectedPluginMaps.length > 0 && (
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Map</label>
+                      <select
+                        value={form.map}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, map: e.target.value }))
+                        }
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                      >
+                        {selectedPluginMaps.map((mapOption) => (
+                          <option key={mapOption.id} value={mapOption.id}>
+                            {mapOption.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Required for managed provisioning so the host layout and ports can be prepared.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Agent */}
                   <div>

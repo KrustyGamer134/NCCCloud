@@ -43,7 +43,26 @@ export interface InstanceDetailResponse {
   };
 }
 
-export async function fetchPlugins(token: string) {
+export interface PluginProvisioningMap {
+  id: string;
+  display_name: string;
+}
+
+export interface PluginProvisioningMetadata {
+  default_map?: string;
+  maps?: PluginProvisioningMap[];
+}
+
+export interface PluginSummary {
+  plugin_id: string;
+  game_system_id: string;
+  display_name: string;
+  description?: string | null;
+  available_in_plans?: string[];
+  provisioning?: PluginProvisioningMetadata | null;
+}
+
+export async function fetchPlugins(token: string): Promise<PluginSummary[]> {
   const res = await fetch(`${API_URL}/plugins`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -119,7 +138,12 @@ export async function saveInstanceConfig(
 
 export async function createInstance(
   token: string,
-  body: { plugin_id: string; display_name: string; agent_id?: string },
+  body: {
+    plugin_id: string;
+    display_name: string;
+    agent_id?: string;
+    config_json?: Record<string, unknown>;
+  },
 ) {
   const res = await fetch(`${API_URL}/instances`, {
     method: "POST",

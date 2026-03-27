@@ -69,6 +69,47 @@ def test_unknown_plan_falls_back_to_free():
     assert limits == free_limits
 
 
+@pytest.mark.asyncio
+async def test_list_plugins_exposes_map_provisioning_metadata():
+    from api.routes.plugins import list_plugins
+
+    tenant_id = _tenant_id()
+    tenant = MagicMock()
+    tenant.plan = "pro"
+    plugin = MagicMock()
+    plugin.plugin_id = "ark"
+    plugin.display_name = "ARK: Survival Ascended"
+    plugin.description = "ARK"
+    plugin.available_in_plans = ["free", "pro"]
+    plugin.plugin_json = {
+        "maps": {
+            "TheIsland_WP": {"display_name": "The Island"},
+            "ScorchedEarth_WP": {"display_name": "Scorched Earth"},
+        },
+        "server_settings": {
+            "map": {"value": "TheIsland_WP"},
+        },
+    }
+
+    tenant_result = MagicMock()
+    tenant_result.scalar_one_or_none.return_value = tenant
+    plugins_result = MagicMock()
+    plugins_result.scalars.return_value.all.return_value = [plugin]
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[tenant_result, plugins_result])
+
+    result = await list_plugins(tenant_id=tenant_id, db=db)
+
+    assert len(result) == 1
+    assert result[0].provisioning == {
+        "default_map": "TheIsland_WP",
+        "maps": [
+            {"id": "TheIsland_WP", "display_name": "The Island"},
+            {"id": "ScorchedEarth_WP", "display_name": "Scorched Earth"},
+        ],
+    }
+
+
 def test_pro_has_no_hard_limits():
     limits = get_limits("pro")
     assert limits["max_instances"] is None
