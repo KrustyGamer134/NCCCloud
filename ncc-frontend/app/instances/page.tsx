@@ -430,10 +430,17 @@ export default function InstancesPage() {
                     <tr
                       key={inst.instance_id}
                       className={`border-b border-gray-800 last:border-0 ${
-                        idx % 2 === 0 ? "bg-gray-950" : "bg-gray-900/40"
+                      idx % 2 === 0 ? "bg-gray-950" : "bg-gray-900/40"
                       }`}
                     >
-                      <td className="px-4 py-3 font-medium">{inst.display_name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link
+                          href={`/instances/${encodeURIComponent(inst.instance_id)}`}
+                          className="hover:text-blue-300 transition-colors"
+                        >
+                          {inst.display_name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-gray-400 font-mono text-xs">
                         {inst.plugin_id}
                       </td>

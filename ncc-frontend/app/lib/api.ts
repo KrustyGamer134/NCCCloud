@@ -1,5 +1,48 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
 
+export interface InstanceDetailResponse {
+  instance: {
+    instance_id: string;
+    display_name: string;
+    plugin_id: string;
+    game_system_id: string;
+    status: string;
+    install_status: string;
+    agent_online: boolean;
+    config_json: Record<string, unknown>;
+  };
+  status: {
+    status: string;
+    data?: {
+      state?: string;
+      install_status?: string;
+      runtime_running?: boolean;
+      runtime_ready?: boolean;
+      [key: string]: unknown;
+    };
+  } | null;
+  install_progress: {
+    status: string;
+    data?: {
+      state?: string;
+      install_log_tail?: string[];
+      steamcmd_log_tail?: string[];
+      progress_metadata?: Record<string, unknown> | null;
+      [key: string]: unknown;
+    };
+  } | null;
+  logs: {
+    install_server?: {
+      status: string;
+      data?: { lines?: string[]; [key: string]: unknown };
+    } | null;
+    server?: {
+      status: string;
+      data?: { lines?: string[]; [key: string]: unknown };
+    } | null;
+  };
+}
+
 export async function fetchPlugins(token: string) {
   const res = await fetch(`${API_URL}/plugins`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -148,4 +191,17 @@ export async function fetchInstances(token: string) {
   if (!res.ok) throw new Error("Failed to fetch instances");
 
   return JSON.parse(text);
+}
+
+export async function fetchInstanceDetail(token: string, instanceId: string): Promise<InstanceDetailResponse> {
+  const res = await fetch(`${API_URL}/instances/${encodeURIComponent(instanceId)}/detail`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.error ?? `Failed to fetch instance detail (${res.status})`);
+  }
+
+  return res.json();
 }
