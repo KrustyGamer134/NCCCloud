@@ -145,13 +145,17 @@ export default function InstancesPage() {
 
   const selectedPlugin = modalPlugins.find((plugin) => plugin.plugin_id === form.plugin_id);
   const selectedPluginMaps = selectedPlugin?.provisioning?.maps ?? [];
+  const managedCreateRequiresAgent = selectedPluginMaps.length > 0;
+  const connectedModalAgents = modalAgents.filter((agent) => agent.is_connected);
 
   function buildInitialForm(plugs: PluginSummary[], agts: Agent[]) {
     const firstPlugin = plugs[0];
+    const preferredAgent =
+      agts.find((agent) => agent.is_connected)?.agent_id ?? agts[0]?.agent_id ?? "";
     return {
       ...EMPTY_FORM,
       plugin_id: firstPlugin?.plugin_id ?? "",
-      agent_id: agts[0]?.agent_id ?? "",
+      agent_id: preferredAgent,
       map:
         firstPlugin?.provisioning?.default_map ??
         firstPlugin?.provisioning?.maps?.[0]?.id ??
@@ -264,6 +268,10 @@ export default function InstancesPage() {
     }
     if (selectedPluginMaps.length > 0 && !form.map) {
       setAddError("Please select a map.");
+      return;
+    }
+    if (managedCreateRequiresAgent && !form.agent_id) {
+      setAddError("Please select a connected agent for managed provisioning.");
       return;
     }
     setAddBusy(true);
@@ -739,6 +747,13 @@ export default function InstancesPage() {
                         </option>
                       ))}
                     </select>
+                    {managedCreateRequiresAgent && (
+                      <p className={`mt-1 text-xs ${connectedModalAgents.length > 0 ? "text-gray-500" : "text-red-400"}`}>
+                        {connectedModalAgents.length > 0
+                          ? "Managed ARK create requires a connected agent."
+                          : "No connected agents are available. Managed ARK create needs an online host agent."}
+                      </p>
+                    )}
                   </div>
 
                   {selectedPluginMaps.length > 0 && (
@@ -767,7 +782,9 @@ export default function InstancesPage() {
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">
                       Agent{" "}
-                      <span className="text-gray-600">(optional)</span>
+                      <span className="text-gray-600">
+                        {managedCreateRequiresAgent ? "(required for managed provisioning)" : "(optional)"}
+                      </span>
                     </label>
                     <select
                       value={form.agent_id}
