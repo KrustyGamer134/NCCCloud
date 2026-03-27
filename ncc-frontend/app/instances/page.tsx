@@ -24,6 +24,7 @@ interface Instance {
   display_name: string;
   plugin_id: string;
   status: string;
+  install_status: string;
   agent_online: boolean;
 }
 
@@ -80,6 +81,12 @@ function AgentBadge({ online }: { online: boolean }) {
       {online ? "Online" : "Offline"}
     </span>
   );
+}
+
+function needsManagedSetup(inst: Instance) {
+  const installStatus = String(inst.install_status || "").toLowerCase();
+  const lifecycleState = String(inst.status || "").toLowerCase();
+  return ["not_installed", "unknown", "failed", "error"].includes(installStatus) || lifecycleState !== "running";
 }
 
 function TrashIcon() {
@@ -508,7 +515,15 @@ export default function InstancesPage() {
                         <AgentBadge online={inst.agent_online} />
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-3">
+                          {needsManagedSetup(inst) && (
+                            <Link
+                              href={`/instances/${encodeURIComponent(inst.instance_id)}`}
+                              className="text-xs text-blue-300 hover:text-white transition-colors"
+                            >
+                              Continue setup
+                            </Link>
+                          )}
                           <ActionButton
                             label="Start"
                             busy={busy && busyAction === "start"}
