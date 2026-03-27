@@ -89,6 +89,18 @@ function needsManagedSetup(inst: Instance) {
   return ["not_installed", "unknown", "failed", "error"].includes(installStatus) || lifecycleState !== "running";
 }
 
+function managedSetupLabel(inst: Instance) {
+  const installStatus = String(inst.install_status || "").toLowerCase();
+  const lifecycleState = String(inst.status || "").toLowerCase();
+  if (["not_installed", "unknown", "failed", "error"].includes(installStatus)) {
+    return "Install server";
+  }
+  if (lifecycleState !== "running") {
+    return "Start server";
+  }
+  return "Continue setup";
+}
+
 function TrashIcon() {
   return (
     <svg
@@ -535,7 +547,7 @@ export default function InstancesPage() {
                               href={`/instances/${encodeURIComponent(inst.instance_id)}`}
                               className="text-xs text-blue-300 hover:text-white transition-colors"
                             >
-                              Continue setup
+                              {managedSetupLabel(inst)}
                             </Link>
                           )}
                           <ActionButton
