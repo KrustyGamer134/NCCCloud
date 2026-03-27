@@ -231,6 +231,7 @@ function formToInstanceConfig(form: InstanceForm): Record<string, unknown> {
       .map((x) => x.trim())
       .filter(Boolean);
   const out: Record<string, unknown> = {
+    map: form.map.trim(),
     rcon_enabled: form.rcon_enabled,
     mods: toList(form.mods),
     passive_mods: toList(form.passive_mods),
