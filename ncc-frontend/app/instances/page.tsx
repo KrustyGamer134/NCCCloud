@@ -164,16 +164,18 @@ export default function InstancesPage() {
 
   function buildInitialForm(plugs: PluginSummary[], agts: Agent[]) {
     const firstPlugin = plugs[0];
+    const initialMap =
+      firstPlugin?.provisioning?.default_map ??
+      firstPlugin?.provisioning?.maps?.[0]?.id ??
+      "";
     const preferredAgent =
       agts.find((agent) => agent.is_connected)?.agent_id ?? agts[0]?.agent_id ?? "";
     return {
       ...EMPTY_FORM,
+      display_name: initialMap,
       plugin_id: firstPlugin?.plugin_id ?? "",
       agent_id: preferredAgent,
-      map:
-        firstPlugin?.provisioning?.default_map ??
-        firstPlugin?.provisioning?.maps?.[0]?.id ??
-        "",
+      map: initialMap,
     };
   }
 
