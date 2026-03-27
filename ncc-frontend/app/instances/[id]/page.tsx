@@ -181,7 +181,10 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
           <Link href="/instances" className="text-sm text-gray-400 hover:text-white transition-colors">
             Game Servers
           </Link>
-          <Link href="/settings" className="text-sm text-gray-400 hover:text-white transition-colors">
+          <Link
+            href={`/settings?tab=instances&instanceId=${encodeURIComponent(instanceId)}`}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
             Settings
           </Link>
           <UserButton />
