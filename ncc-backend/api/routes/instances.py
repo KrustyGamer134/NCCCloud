@@ -74,6 +74,20 @@ class InstanceDetailResponse(BaseModel):
     logs: dict
 
 
+def _unwrap_agent_command_result(result: dict) -> tuple[dict, dict]:
+    outer = result if isinstance(result, dict) else {}
+    inner = outer.get("data") if isinstance(outer.get("data"), dict) else {}
+    return outer, inner
+
+
+def _raise_agent_command_error(result: dict) -> None:
+    outer, inner = _unwrap_agent_command_result(result)
+    if outer.get("status") != "success":
+        raise HTTPException(status_code=409, detail=outer)
+    if inner.get("status") == "error":
+        raise HTTPException(status_code=409, detail=inner)
+
+
 async def _provision_instance_on_agent(
     *,
     inst: Instance,
@@ -102,8 +116,7 @@ async def _provision_instance_on_agent(
             "plugin_json": plugin_json,
         },
     )
-    if created.get("status") != "success":
-        raise HTTPException(status_code=409, detail=created)
+    _raise_agent_command_error(created)
 
     config_json = dict(inst.config_json or {})
     map_name = str(config_json.get("map") or config_json.get("map_name") or "").strip()
@@ -129,9 +142,8 @@ async def _provision_instance_on_agent(
                 "plugin_json": plugin_json,
             },
         )
-        if allocated.get("status") != "success":
-            raise HTTPException(status_code=409, detail=allocated)
-        allocated_data = allocated.get("data") if isinstance(allocated.get("data"), dict) else {}
+        _raise_agent_command_error(allocated)
+        _, allocated_data = _unwrap_agent_command_result(allocated)
         try:
             game_port = int(allocated_data.get("game_port") or 0)
             rcon_port = int(allocated_data.get("rcon_port") or 0)
@@ -160,8 +172,7 @@ async def _provision_instance_on_agent(
             "map_mod": config_json.get("map_mod"),
         },
     )
-    if configured.get("status") != "success":
-        raise HTTPException(status_code=409, detail=configured)
+    _raise_agent_command_error(configured)
 
     config_json["map"] = map_name
     config_json["game_port"] = game_port

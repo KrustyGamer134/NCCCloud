@@ -6,6 +6,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://ncc_app:changeme@localhost:5432/ncc_test")
 os.environ.setdefault("CLERK_JWKS_URL", "https://example.test/.well-known/jwks.json")
@@ -129,3 +130,64 @@ async def test_create_instance_uses_display_name_as_ark_map_when_missing():
     assert response.config_json["map"] == "TheIsland_WP"
     assert response.config_json["game_port"] == 27015
     assert response.config_json["rcon_port"] == 27020
+
+
+@pytest.mark.asyncio
+async def test_create_instance_surfaces_inner_allocate_ports_error():
+    tenant_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+
+    tenant = types.SimpleNamespace(plan="pro")
+    plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(tenant),
+            _scalar_result(plugin_catalog),
+        ]
+    )
+    db.flush = AsyncMock()
+    db.add = MagicMock()
+
+    body = CreateInstanceBody(
+        plugin_id="ark_survival_ascended",
+        display_name="TheIsland_WP",
+        agent_id=str(agent_id),
+        config_json={"map": "TheIsland_WP"},
+    )
+    request = types.SimpleNamespace(state=types.SimpleNamespace(user_id="user-1"))
+
+    send_results = [
+        {"status": "success", "data": {"action": "created"}},
+        {
+            "status": "success",
+            "data": {
+                "status": "error",
+                "message": "No available port pair in configured policy range",
+            },
+        },
+    ]
+
+    with patch("api.routes.instances.check_instance_limit", new=AsyncMock()), patch(
+        "api.routes.instances.is_agent_connected", return_value=True
+    ), patch(
+        "api.routes.instances.send_command",
+        new=AsyncMock(side_effect=send_results),
+    ), patch(
+        "api.routes.instances.write_audit_log",
+        new=AsyncMock(),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await create_instance(
+                body=body,
+                request=request,
+                tenant_id=str(tenant_id),
+                db=db,
+            )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == {
+        "status": "error",
+        "message": "No available port pair in configured policy range",
+    }
