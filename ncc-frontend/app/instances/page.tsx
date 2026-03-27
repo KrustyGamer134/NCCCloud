@@ -785,6 +785,11 @@ export default function InstancesPage() {
                       placeholder="e.g. TheIsland"
                       className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
+                    {selectedPluginMaps.length > 0 && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Defaults to the selected map name for the managed ARK path.
+                      </p>
+                    )}
                   </div>
 
                   {/* Plugin */}
