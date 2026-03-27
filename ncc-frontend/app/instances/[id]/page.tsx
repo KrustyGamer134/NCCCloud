@@ -264,6 +264,9 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
                       Open instance configuration
                     </Link>
                   </div>
+                  <div className="mt-3 text-xs text-blue-100/70">
+                    {`Map ${configuredMap} • Game ${String(detail.instance.config_json?.game_port ?? "unset")} • RCON ${String(detail.instance.config_json?.rcon_port ?? "unset")}`}
+                  </div>
                 </div>
                 {recommendedAction.action && (
                   <button
