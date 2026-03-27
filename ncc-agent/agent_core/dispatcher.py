@@ -12,6 +12,7 @@ restart        → AdminAPI.restart_instance(plugin_name, instance_id)
 install_deps   → AdminAPI.install_deps(plugin_name, instance_id)
 install_server → AdminAPI.install_server(plugin_name, instance_id)
 get_status     → AdminAPI.read_cached_instance_status(plugin_name, instance_id)
+get_install_progress → AdminAPI.get_install_progress(plugin_name, instance_id, last_lines)
 fetch_logs     → AdminAPI.get_log_tail(plugin_name, instance_id, log_name, last_lines)
                NOTE: AdminAPI.get_log_tail requires a log_name parameter.
                The payload may supply {"log_name": "...", "lines": N}.
@@ -176,6 +177,10 @@ def _route(action: str, plugin_name: str, instance_id: str, payload: dict, admin
         # Returns a plain dict (not the standard envelope), consistent with how
         # read_cached_instance_status is used throughout the codebase.
         return admin_api.read_cached_instance_status(plugin_name, instance_id)
+
+    if action == "get_install_progress":
+        lines = int(payload.get("lines") or 50)
+        return admin_api.get_install_progress(plugin_name, instance_id, last_lines=lines)
 
     if action == "fetch_logs":
         log_name = payload.get("log_name") or _DEFAULT_LOG_NAME

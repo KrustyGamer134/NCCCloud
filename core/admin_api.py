@@ -1195,6 +1195,90 @@ class AdminAPI:
             },
         }
 
+    def get_install_progress(self, plugin_name, instance_id, last_lines=50):
+        from pathlib import Path
+        import json
+
+        resolved = self._resolve_instance_path_context(plugin_name, instance_id)
+        if not isinstance(resolved, dict) or resolved.get("status") != "success":
+            return resolved
+
+        try:
+            n = int(last_lines)
+        except Exception:
+            n = 50
+        if n <= 0:
+            n = 50
+        if n > 500:
+            n = 500
+
+        data = resolved.get("data") or {}
+        canonical = data.get("canonical") if isinstance(data, dict) else {}
+        legacy = data.get("legacy") if isinstance(data, dict) else {}
+        logs_root = ""
+        if isinstance(canonical, dict):
+            logs_root = str(canonical.get("logs_dir") or "").strip()
+        if not logs_root and isinstance(legacy, dict):
+            logs_root = str(legacy.get("logs_dir") or "").strip()
+        if not logs_root:
+            return {"status": "error", "message": "log root not configured (needs gameservers_root+map or legacy install_root)"}
+
+        logs_path = Path(logs_root)
+        install_log_path = logs_path / "install_server.log"
+        steamcmd_log_path = logs_path / "steamcmd_install.log"
+        progress_metadata_path = logs_path / "steamcmd_progress_source.json"
+
+        def _tail(path: Path):
+            if not path.exists() or not path.is_file():
+                return False, []
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            except Exception:
+                return False, []
+            tail = lines[-n:] if len(lines) > n else lines
+            return True, tail
+
+        metadata = None
+        if progress_metadata_path.exists() and progress_metadata_path.is_file():
+            try:
+                raw = json.loads(progress_metadata_path.read_text(encoding="utf-8-sig"))
+                if isinstance(raw, dict):
+                    metadata = raw
+            except Exception:
+                metadata = None
+
+        install_found, install_tail = _tail(install_log_path)
+        steamcmd_found, steamcmd_tail = _tail(steamcmd_log_path)
+
+        progress_state = "not_started"
+        if metadata is not None or install_found or steamcmd_found:
+            progress_state = "running"
+        if install_tail and any("steamcmd install complete" in str(line).lower() for line in install_tail):
+            progress_state = "completed"
+        if install_tail and any("failed" in str(line).lower() or "timeout" in str(line).lower() for line in install_tail):
+            progress_state = "failed"
+
+        return {
+            "status": "success",
+            "data": {
+                "plugin_name": str(plugin_name),
+                "instance_id": str(instance_id),
+                "state": progress_state,
+                "paths": {
+                    "logs_dir": str(logs_path),
+                    "install_log": str(install_log_path),
+                    "steamcmd_log": str(steamcmd_log_path),
+                    "progress_metadata": str(progress_metadata_path),
+                },
+                "progress_metadata": metadata,
+                "install_log_found": install_found,
+                "install_log_tail": install_tail,
+                "steamcmd_log_found": steamcmd_found,
+                "steamcmd_log_tail": steamcmd_tail,
+                "last_lines": n,
+            },
+        }
+
     ############################################################
     # SECTION: Provisioning / Onboarding (Validate + Add Instance)
     ############################################################
@@ -1587,7 +1671,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

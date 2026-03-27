@@ -45,6 +45,27 @@ class DiscoverBody(BaseModel):
     agent_id: str | None = None
 
 
+class InstanceStatusResponse(BaseModel):
+    instance_id: str
+    game_system_id: str
+    plugin_id: str
+    status: dict
+
+
+class InstanceLogResponse(BaseModel):
+    instance_id: str
+    game_system_id: str
+    plugin_id: str
+    log: dict
+
+
+class InstanceInstallProgressResponse(BaseModel):
+    instance_id: str
+    game_system_id: str
+    plugin_id: str
+    progress: dict
+
+
 async def _provision_instance_on_agent(
     *,
     inst: Instance,
@@ -232,6 +253,66 @@ async def _action(
     return result
 
 
+async def _read_instance_from_agent(
+    *,
+    inst: Instance,
+    command: str,
+    payload: dict,
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession,
+) -> dict:
+    if inst.agent_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "No agent assigned to this instance", "code": "NO_AGENT"},
+        )
+
+    agent_id_str = str(inst.agent_id)
+    if not is_agent_connected(agent_id_str):
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Agent is not connected", "code": "AGENT_OFFLINE"},
+        )
+
+    catalog_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    catalog_row = catalog_result.scalar_one_or_none()
+    plugin_json = catalog_row.plugin_json if catalog_row else {}
+
+    result = await send_command(
+        agent_id=agent_id_str,
+        command=command,
+        payload={
+            "instance_id": str(inst.instance_id),
+            "plugin_name": inst.plugin_id,
+            "game_system_id": inst.plugin_id,
+            "plugin_json": plugin_json,
+            **dict(payload or {}),
+        },
+    )
+
+    await write_audit_log(
+        db=db,
+        tenant_id=tenant_id,
+        action=f"instance.read.{command}",
+        outcome=result.get("status", "unknown"),
+        user_id=getattr(request.state, "user_id", None),
+        agent_id=inst.agent_id,
+        instance_id=inst.instance_id,
+        detail=result,
+    )
+
+    code = result.get("code", "")
+    if code == "agent_offline":
+        raise HTTPException(status_code=503, detail=result)
+    if code == "agent_timeout":
+        raise HTTPException(status_code=504, detail=result)
+
+    return result
+
+
 @router.get("", response_model=list[InstanceResponse])
 async def list_instances(
     tenant_id: str = Depends(require_tenant),
@@ -252,6 +333,81 @@ async def get_instance(
 ) -> InstanceResponse:
     inst = await _get_instance(instance_id, tenant_id, db)
     return InstanceResponse.from_orm_safe(inst)
+
+
+@router.get("/{instance_id}/status", response_model=InstanceStatusResponse)
+async def get_instance_status(
+    instance_id: str,
+    request: Request,
+    tenant_id: str = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> InstanceStatusResponse:
+    inst = await _get_instance(instance_id, tenant_id, db)
+    result = await _read_instance_from_agent(
+        inst=inst,
+        command="get-status",
+        payload={},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    return InstanceStatusResponse(
+        instance_id=str(inst.instance_id),
+        game_system_id=inst.plugin_id,
+        plugin_id=inst.plugin_id,
+        status=result,
+    )
+
+
+@router.get("/{instance_id}/logs/{log_name}", response_model=InstanceLogResponse)
+async def get_instance_log(
+    instance_id: str,
+    log_name: str,
+    request: Request,
+    lines: int = 200,
+    tenant_id: str = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> InstanceLogResponse:
+    inst = await _get_instance(instance_id, tenant_id, db)
+    result = await _read_instance_from_agent(
+        inst=inst,
+        command="fetch-logs",
+        payload={"log_name": str(log_name), "lines": int(lines)},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    return InstanceLogResponse(
+        instance_id=str(inst.instance_id),
+        game_system_id=inst.plugin_id,
+        plugin_id=inst.plugin_id,
+        log=result,
+    )
+
+
+@router.get("/{instance_id}/install-progress", response_model=InstanceInstallProgressResponse)
+async def get_instance_install_progress(
+    instance_id: str,
+    request: Request,
+    lines: int = 50,
+    tenant_id: str = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> InstanceInstallProgressResponse:
+    inst = await _get_instance(instance_id, tenant_id, db)
+    result = await _read_instance_from_agent(
+        inst=inst,
+        command="get-install-progress",
+        payload={"lines": int(lines)},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    return InstanceInstallProgressResponse(
+        instance_id=str(inst.instance_id),
+        game_system_id=inst.plugin_id,
+        plugin_id=inst.plugin_id,
+        progress=result,
+    )
 
 
 @router.post("", response_model=InstanceResponse, status_code=201)
