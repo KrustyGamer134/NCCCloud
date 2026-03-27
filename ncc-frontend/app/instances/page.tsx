@@ -190,6 +190,15 @@ export default function InstancesPage() {
     }));
   }
 
+  function closeModal() {
+    if (addBusy || modalLoading) return;
+    setShowModal(false);
+    setAddError(null);
+    setForm(EMPTY_FORM);
+    setModalPlugins([]);
+    setModalAgents([]);
+  }
+
   // ── Fetch instances ────────────────────────────────────────────────────────
   const loadInstances = useCallback(async () => {
     try {
@@ -300,8 +309,7 @@ export default function InstancesPage() {
         agent_id: form.agent_id || undefined,
         config_json: form.map ? { map: form.map } : undefined,
       });
-      setShowModal(false);
-      setForm(EMPTY_FORM);
+      closeModal();
       router.push(`/instances/${encodeURIComponent(created.instance_id)}`);
     } catch (e: any) {
       setAddError(e.message ?? "Unknown error");
@@ -720,15 +728,16 @@ export default function InstancesPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setShowModal(false);
+            if (e.target === e.currentTarget) closeModal();
           }}
         >
           <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <h2 className="text-lg font-semibold">Add Server</h2>
               <button
-                onClick={() => setShowModal(false)}
-                className="text-gray-500 hover:text-white text-xl leading-none"
+                onClick={closeModal}
+                disabled={addBusy || modalLoading}
+                className="text-gray-500 hover:text-white text-xl leading-none disabled:opacity-40"
               >
                 ×
               </button>
@@ -852,8 +861,9 @@ export default function InstancesPage() {
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 transition-colors"
+                  onClick={closeModal}
+                  disabled={addBusy || modalLoading}
+                  className="px-4 py-2 rounded text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 transition-colors disabled:opacity-40"
                 >
                   Cancel
                 </button>
