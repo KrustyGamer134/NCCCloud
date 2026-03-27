@@ -480,6 +480,7 @@ export default function InstancesPage() {
                   const busy = inst.instance_id in pending;
                   const busyAction = pending[inst.instance_id];
                   const isDeleting = deletingId === inst.instance_id;
+                  const actionsDisabled = busy || isDeleting || !inst.agent_online;
                   return (
                     <tr
                       key={inst.instance_id}
@@ -509,21 +510,21 @@ export default function InstancesPage() {
                           <ActionButton
                             label="Start"
                             busy={busy && busyAction === "start"}
-                            disabled={busy || isDeleting}
+                            disabled={actionsDisabled}
                             onClick={() => handleAction(inst.instance_id, "start")}
                             variant="green"
                           />
                           <ActionButton
                             label="Stop"
                             busy={busy && busyAction === "stop"}
-                            disabled={busy || isDeleting}
+                            disabled={actionsDisabled}
                             onClick={() => handleAction(inst.instance_id, "stop")}
                             variant="red"
                           />
                           <ActionButton
                             label="Restart"
                             busy={busy && busyAction === "restart"}
-                            disabled={busy || isDeleting}
+                            disabled={actionsDisabled}
                             onClick={() => handleAction(inst.instance_id, "restart")}
                             variant="yellow"
                           />
@@ -531,7 +532,7 @@ export default function InstancesPage() {
                           <button
                             onClick={() => handleDelete(inst.instance_id)}
                             disabled={busy || isDeleting}
-                            title="Delete instance"
+                            title={inst.agent_online ? "Delete instance" : "Agent offline"}
                             className="p-1.5 rounded text-gray-500 hover:text-red-400 hover:bg-red-950 border border-transparent hover:border-red-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             {isDeleting ? "…" : <TrashIcon />}
