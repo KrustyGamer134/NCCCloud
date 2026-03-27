@@ -1099,6 +1099,16 @@ function InstanceConfigTab({
                   onSave={handleSave}
                   label="Save Instance Config"
                 />
+                {success && activeInstance && (
+                  <div className="mt-3 text-sm">
+                    <Link
+                      href={`/instances/${encodeURIComponent(activeInstance.instance_id)}`}
+                      className="text-blue-300 hover:text-white transition-colors"
+                    >
+                      Return to instance detail
+                    </Link>
+                  </div>
+                )}
               </>
             )}
           </div>
