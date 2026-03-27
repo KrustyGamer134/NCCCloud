@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 import uuid
@@ -524,13 +524,21 @@ async def create_instance(
     plan = tenant.plan if tenant else "free"
     await check_instance_limit(db, tenant_id, plan)
 
+    config_json = dict(body.config_json or {})
+    if body.plugin_id == "ark_survival_ascended":
+        fallback_map = str(config_json.get("map") or "").strip()
+        if not fallback_map:
+            fallback_map = body.display_name.strip()
+        if fallback_map:
+            config_json["map"] = fallback_map
+
     inst = Instance(
         instance_id=uuid.uuid4(),
         tenant_id=uuid.UUID(tenant_id),
         agent_id=uuid.UUID(body.agent_id) if body.agent_id else None,
         plugin_id=body.plugin_id,
         display_name=body.display_name,
-        config_json=body.config_json or {},
+        config_json=config_json,
         status="unknown",
         install_status="not_installed",
     )
@@ -706,3 +714,4 @@ async def install_server(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return await _action(instance_id, "install-server", request, tenant_id, db)
+
