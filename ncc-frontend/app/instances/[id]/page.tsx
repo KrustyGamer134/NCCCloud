@@ -243,11 +243,19 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
         ) : detail ? (
           <div className="space-y-6">
             <section className="rounded-lg border border-blue-800 bg-blue-950/40 p-4">
-              <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-blue-300">Next Step</div>
                   <div className="mt-2 text-sm font-medium text-white">{recommendedAction.title}</div>
                   <p className="mt-1 text-sm text-blue-100/80">{recommendedAction.body}</p>
+                  <div className="mt-3">
+                    <Link
+                      href={`/settings?tab=instances&instanceId=${encodeURIComponent(instanceId)}`}
+                      className="text-sm text-blue-300 hover:text-white transition-colors"
+                    >
+                      Open instance configuration
+                    </Link>
+                  </div>
                 </div>
                 {recommendedAction.action && (
                   <button

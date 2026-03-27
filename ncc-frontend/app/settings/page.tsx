@@ -3,6 +3,7 @@
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   fetchAppSettings,
   saveAppSettings,
@@ -891,9 +892,11 @@ function PluginDefaultsTab({
 function InstanceConfigTab({
   instances,
   getToken,
+  initialInstanceId,
 }: {
   instances: Instance[];
   getToken: () => Promise<string | null>;
+  initialInstanceId?: string | null;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [form, setForm] = useState<InstanceForm>({ map: "", game_port: "", rcon_port: "", rcon_enabled: true, admin_password: "", max_players: "", server_name: "", mods: "", passive_mods: "", map_mod: "" });
@@ -910,6 +913,13 @@ function InstanceConfigTab({
     setSuccess(false);
     setForm(instanceConfigToForm(inst.config_json ?? {}));
   }
+
+  useEffect(() => {
+    if (!initialInstanceId) return;
+    const initialInstance = instances.find((inst) => inst.instance_id === initialInstanceId);
+    if (!initialInstance) return;
+    selectInstance(initialInstance);
+  }, [initialInstanceId, instances]);
 
   async function handleSave() {
     if (!activeId) return;
@@ -1066,6 +1076,7 @@ function InstanceConfigTab({
 
 export default function SettingsPage() {
   const { getToken } = useAuth();
+  const searchParams = useSearchParams();
 
   const [tab, setTab] = useState<Tab>("app");
   const [loading, setLoading] = useState(true);
@@ -1096,6 +1107,13 @@ export default function SettingsPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab === "app" || requestedTab === "plugins" || requestedTab === "instances") {
+      setTab(requestedTab);
+    }
+  }, [searchParams]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "app", label: "App Settings" },
@@ -1167,7 +1185,11 @@ export default function SettingsPage() {
               <PluginDefaultsTab plugins={plugins} getToken={getToken} />
             )}
             {tab === "instances" && (
-              <InstanceConfigTab instances={instances} getToken={getToken} />
+              <InstanceConfigTab
+                instances={instances}
+                getToken={getToken}
+                initialInstanceId={searchParams.get("instanceId")}
+              />
             )}
           </>
         )}
