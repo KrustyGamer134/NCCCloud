@@ -904,6 +904,9 @@ function InstanceConfigTab({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const requestedInstance = initialInstanceId
+    ? instances.find((inst) => inst.instance_id === initialInstanceId) ?? null
+    : null;
 
   const set = <K extends keyof InstanceForm>(k: K, v: InstanceForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -947,6 +950,25 @@ function InstanceConfigTab({
         Per-server configuration. These values override plugin defaults for the
         selected server instance.
       </p>
+
+      {requestedInstance && (
+        <div className="mb-6 rounded-lg border border-blue-800 bg-blue-950/40 px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-blue-300">Managed Flow</div>
+              <p className="mt-1 text-sm text-blue-100">
+                Editing config for <span className="font-medium text-white">{requestedInstance.display_name}</span>.
+              </p>
+            </div>
+            <Link
+              href={`/instances/${encodeURIComponent(requestedInstance.instance_id)}`}
+              className="shrink-0 text-sm text-blue-300 hover:text-white transition-colors"
+            >
+              Back to instance detail
+            </Link>
+          </div>
+        </div>
+      )}
 
       {instances.length === 0 ? (
         <p className="text-gray-500 text-sm">No instances found.</p>
