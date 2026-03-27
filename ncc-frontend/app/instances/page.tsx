@@ -174,6 +174,7 @@ export default function InstancesPage() {
     const plugin = modalPlugins.find((item) => item.plugin_id === pluginId);
     const nextMap =
       plugin?.provisioning?.default_map ?? plugin?.provisioning?.maps?.[0]?.id ?? "";
+    setAddError(null);
     setForm((current) => ({
       ...current,
       display_name: current.display_name || nextMap,
@@ -735,9 +736,10 @@ export default function InstancesPage() {
                     <input
                       type="text"
                       value={form.display_name}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, display_name: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        setAddError(null);
+                        setForm((f) => ({ ...f, display_name: e.target.value }));
+                      }}
                       placeholder="e.g. TheIsland"
                       className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
@@ -775,11 +777,14 @@ export default function InstancesPage() {
                       <select
                         value={form.map}
                         onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            display_name: f.display_name || e.target.value,
-                            map: e.target.value,
-                          }))
+                          {
+                            setAddError(null);
+                            setForm((f) => ({
+                              ...f,
+                              display_name: f.display_name || e.target.value,
+                              map: e.target.value,
+                            }));
+                          }
                         }
                         className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                       >
@@ -806,7 +811,10 @@ export default function InstancesPage() {
                     <select
                       value={form.agent_id}
                       onChange={(e) =>
-                        setForm((f) => ({ ...f, agent_id: e.target.value }))
+                        {
+                          setAddError(null);
+                          setForm((f) => ({ ...f, agent_id: e.target.value }));
+                        }
                       }
                       className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                     >
