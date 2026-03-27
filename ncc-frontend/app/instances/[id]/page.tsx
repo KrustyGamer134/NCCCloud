@@ -4,7 +4,7 @@ import Link from "next/link";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchInstanceDetail, type InstanceDetailResponse } from "../../lib/api";
+import { fetchInstanceDetail, runInstanceAction, type InstanceDetailResponse } from "../../lib/api";
 
 function StatusBadge({ label }: { label: string }) {
   const lowered = String(label || "unknown").toLowerCase();
@@ -37,6 +37,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const [detail, setDetail] = useState<InstanceDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -73,6 +74,20 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
 
+  async function handleAction(action: "install-server" | "start" | "stop" | "restart") {
+    if (!instanceId) return;
+    setPendingAction(action);
+    try {
+      const token = await getToken();
+      await runInstanceAction(token!, instanceId, action);
+      await loadDetail();
+    } catch (e: any) {
+      setError(e.message ?? `Failed to ${action}`);
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <nav className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
@@ -104,12 +119,42 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             <h1 className="text-3xl font-bold">{detail?.instance.display_name ?? "Instance"}</h1>
             <p className="mt-1 text-sm text-gray-500">{detail?.instance.plugin_id ?? "loading"} · {instanceId}</p>
           </div>
-          <button
-            onClick={() => void loadDetail()}
-            className="rounded border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void handleAction("install-server")}
+              disabled={pendingAction !== null}
+              className="rounded border border-blue-700 bg-blue-900 px-3 py-1.5 text-sm text-blue-200 hover:border-blue-500 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {pendingAction === "install-server" ? "Installing..." : "Install"}
+            </button>
+            <button
+              onClick={() => void handleAction("start")}
+              disabled={pendingAction !== null}
+              className="rounded border border-green-700 bg-green-900 px-3 py-1.5 text-sm text-green-200 hover:border-green-500 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {pendingAction === "start" ? "Starting..." : "Start"}
+            </button>
+            <button
+              onClick={() => void handleAction("stop")}
+              disabled={pendingAction !== null}
+              className="rounded border border-red-700 bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:border-red-500 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {pendingAction === "stop" ? "Stopping..." : "Stop"}
+            </button>
+            <button
+              onClick={() => void handleAction("restart")}
+              disabled={pendingAction !== null}
+              className="rounded border border-yellow-700 bg-yellow-900 px-3 py-1.5 text-sm text-yellow-200 hover:border-yellow-500 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {pendingAction === "restart" ? "Restarting..." : "Restart"}
+            </button>
+            <button
+              onClick={() => void loadDetail()}
+              className="rounded border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {error && <div className="mb-4 rounded border border-red-800 bg-red-950 px-4 py-3 text-sm text-red-300">{error}</div>}

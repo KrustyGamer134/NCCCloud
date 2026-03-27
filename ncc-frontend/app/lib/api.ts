@@ -205,3 +205,21 @@ export async function fetchInstanceDetail(token: string, instanceId: string): Pr
 
   return res.json();
 }
+
+export async function runInstanceAction(
+  token: string,
+  instanceId: string,
+  action: "install-server" | "start" | "stop" | "restart",
+) {
+  const res = await fetch(`${API_URL}/instances/${encodeURIComponent(instanceId)}/${action}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.error ?? `Failed to ${action} (${res.status})`);
+  }
+
+  return res.json();
+}
