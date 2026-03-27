@@ -45,6 +45,7 @@ function resolveRecommendedAction(args: {
     return {
       title: "Installation in progress",
       body: "The host is still working. Stay on this page to watch logs and progress update.",
+      action: null,
     };
   }
 
@@ -52,6 +53,7 @@ function resolveRecommendedAction(args: {
     return {
       title: "Install the server",
       body: "Managed provisioning is complete. Run Install next to place the ARK server files on the host.",
+      action: "install-server" as const,
     };
   }
 
@@ -59,13 +61,28 @@ function resolveRecommendedAction(args: {
     return {
       title: "Start the server",
       body: "The server files are in place. Start the instance to launch the ARK runtime and confirm readiness.",
+      action: "start" as const,
     };
   }
 
   return {
     title: "Server is manageable",
     body: "Use Stop or Restart as needed and monitor runtime state and logs from this page.",
+    action: null,
   };
+}
+
+function actionLabel(action: "install-server" | "start" | "stop" | "restart") {
+  switch (action) {
+    case "install-server":
+      return "Install";
+    case "start":
+      return "Start";
+    case "stop":
+      return "Stop";
+    case "restart":
+      return "Restart";
+  }
 }
 
 export default function InstanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -226,9 +243,24 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
         ) : detail ? (
           <div className="space-y-6">
             <section className="rounded-lg border border-blue-800 bg-blue-950/40 p-4">
-              <div className="text-xs uppercase tracking-wide text-blue-300">Next Step</div>
-              <div className="mt-2 text-sm font-medium text-white">{recommendedAction.title}</div>
-              <p className="mt-1 text-sm text-blue-100/80">{recommendedAction.body}</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-blue-300">Next Step</div>
+                  <div className="mt-2 text-sm font-medium text-white">{recommendedAction.title}</div>
+                  <p className="mt-1 text-sm text-blue-100/80">{recommendedAction.body}</p>
+                </div>
+                {recommendedAction.action && (
+                  <button
+                    onClick={() => void handleAction(recommendedAction.action)}
+                    disabled={pendingAction !== null}
+                    className="shrink-0 rounded border border-blue-600 bg-blue-800 px-3 py-1.5 text-sm text-white hover:border-blue-500 hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {pendingAction === recommendedAction.action
+                      ? `${actionLabel(recommendedAction.action)}ing...`
+                      : actionLabel(recommendedAction.action)}
+                  </button>
+                )}
+              </div>
             </section>
 
             <section className="grid gap-4 md:grid-cols-4">
