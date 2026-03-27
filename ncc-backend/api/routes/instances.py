@@ -66,6 +66,13 @@ class InstanceInstallProgressResponse(BaseModel):
     progress: dict
 
 
+class InstanceDetailResponse(BaseModel):
+    instance: InstanceResponse
+    status: dict | None
+    install_progress: dict | None
+    logs: dict
+
+
 async def _provision_instance_on_agent(
     *,
     inst: Instance,
@@ -313,6 +320,33 @@ async def _read_instance_from_agent(
     return result
 
 
+async def _safe_agent_read(
+    *,
+    inst: Instance,
+    command: str,
+    payload: dict,
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession,
+) -> dict | None:
+    if inst.agent_id is None:
+        return None
+    agent_id_str = str(inst.agent_id)
+    if not is_agent_connected(agent_id_str):
+        return None
+    try:
+        return await _read_instance_from_agent(
+            inst=inst,
+            command=command,
+            payload=payload,
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        )
+    except HTTPException:
+        return None
+
+
 @router.get("", response_model=list[InstanceResponse])
 async def list_instances(
     tenant_id: str = Depends(require_tenant),
@@ -333,6 +367,59 @@ async def get_instance(
 ) -> InstanceResponse:
     inst = await _get_instance(instance_id, tenant_id, db)
     return InstanceResponse.from_orm_safe(inst)
+
+
+@router.get("/{instance_id}/detail", response_model=InstanceDetailResponse)
+async def get_instance_detail(
+    instance_id: str,
+    request: Request,
+    tenant_id: str = Depends(require_tenant),
+    db: AsyncSession = Depends(get_db),
+) -> InstanceDetailResponse:
+    inst = await _get_instance(instance_id, tenant_id, db)
+
+    status = await _safe_agent_read(
+        inst=inst,
+        command="get-status",
+        payload={},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    install_progress = await _safe_agent_read(
+        inst=inst,
+        command="get-install-progress",
+        payload={"lines": 50},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    install_log = await _safe_agent_read(
+        inst=inst,
+        command="fetch-logs",
+        payload={"log_name": "install_server", "lines": 50},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+    runtime_log = await _safe_agent_read(
+        inst=inst,
+        command="fetch-logs",
+        payload={"log_name": "server", "lines": 50},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
+
+    return InstanceDetailResponse(
+        instance=InstanceResponse.from_orm_safe(inst),
+        status=status,
+        install_progress=install_progress,
+        logs={
+            "install_server": install_log,
+            "server": runtime_log,
+        },
+    )
 
 
 @router.get("/{instance_id}/status", response_model=InstanceStatusResponse)
