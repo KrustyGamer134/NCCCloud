@@ -907,6 +907,9 @@ function InstanceConfigTab({
   const requestedInstance = initialInstanceId
     ? instances.find((inst) => inst.instance_id === initialInstanceId) ?? null
     : null;
+  const activeInstance = activeId
+    ? instances.find((inst) => inst.instance_id === activeId) ?? null
+    : null;
 
   const set = <K extends keyof InstanceForm>(k: K, v: InstanceForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -1006,6 +1009,12 @@ function InstanceConfigTab({
               </p>
             ) : (
               <>
+                {activeInstance && (
+                  <div className="mb-4 text-sm text-gray-400">
+                    Editing <span className="text-white font-medium">{activeInstance.display_name}</span>
+                    <span className="text-gray-600"> · {activeInstance.plugin_id}</span>
+                  </div>
+                )}
                 <FieldGroup title="Identity">
                   <FieldRow label="Map" hint="Read-only — set when the server was created">
                     <TextInput value={form.map} disabled />
