@@ -31,6 +31,14 @@ export interface InstanceDetailResponse {
       [key: string]: unknown;
     };
   } | null;
+  config_apply: {
+    status: string;
+    data?: {
+      requires_restart?: boolean;
+      pending_fields?: string[];
+      [key: string]: unknown;
+    };
+  } | null;
   logs: {
     install_server?: {
       status: string;

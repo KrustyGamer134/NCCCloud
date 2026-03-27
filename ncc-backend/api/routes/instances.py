@@ -70,6 +70,7 @@ class InstanceDetailResponse(BaseModel):
     instance: InstanceResponse
     status: dict | None
     install_progress: dict | None
+    config_apply: dict | None
     logs: dict
 
 
@@ -377,6 +378,11 @@ async def get_instance_detail(
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailResponse:
     inst = await _get_instance(instance_id, tenant_id, db)
+    pending_ini_sync_fields = [
+        str(item).strip()
+        for item in list((inst.config_json or {}).get("_pending_ini_sync_fields") or [])
+        if str(item).strip()
+    ]
 
     status = await _safe_agent_read(
         inst=inst,
@@ -415,6 +421,13 @@ async def get_instance_detail(
         instance=InstanceResponse.from_orm_safe(inst),
         status=status,
         install_progress=install_progress,
+        config_apply={
+            "status": "deferred" if pending_ini_sync_fields else "applied",
+            "data": {
+                "requires_restart": bool(pending_ini_sync_fields),
+                "pending_fields": pending_ini_sync_fields,
+            },
+        },
         logs={
             "install_server": install_log,
             "server": runtime_log,

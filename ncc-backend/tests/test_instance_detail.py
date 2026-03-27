@@ -32,7 +32,7 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
         agent_id=agent_id,
         plugin_id="ark",
         display_name="Ark Test",
-        config_json={"map": "TheIsland_WP"},
+        config_json={"map": "TheIsland_WP", "_pending_ini_sync_fields": ["server_name", "mods"]},
         status="unknown",
         install_status="not_installed",
         agent_last_seen=None,
@@ -78,6 +78,9 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
     assert response.instance.plugin_id == "ark"
     assert response.status["data"]["state"] == "STOPPED"
     assert response.install_progress["data"]["state"] == "running"
+    assert response.config_apply["status"] == "deferred"
+    assert response.config_apply["data"]["requires_restart"] is True
+    assert response.config_apply["data"]["pending_fields"] == ["server_name", "mods"]
     assert response.logs["install_server"]["data"]["lines"] == ["install line"]
     assert response.logs["server"]["data"]["lines"] == ["runtime line"]
     commands = [call.kwargs["command"] for call in mock_send.await_args_list]

@@ -130,6 +130,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
   const configuredMap = String(detail?.instance.config_json?.map ?? "unset");
   const agentOnline = Boolean(detail?.instance.agent_online);
+  const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
+  const configRequiresRestart = Boolean(detail?.config_apply?.data?.requires_restart);
   const shouldAutoRefresh =
     pendingAction !== null ||
     ["starting", "stopping", "restarting"].includes(String(statusState).toLowerCase()) ||
@@ -270,6 +272,11 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
                   <div className="mt-3 text-xs text-blue-100/70">
                     {`Map ${configuredMap} • Game ${String(detail.instance.config_json?.game_port ?? "unset")} • RCON ${String(detail.instance.config_json?.rcon_port ?? "unset")}`}
                   </div>
+                  {configRequiresRestart && (
+                    <div className="mt-3 text-xs text-yellow-200/90">
+                      {`Config changes are pending host apply after stop/start: ${pendingConfigFields.join(", ")}`}
+                    </div>
+                  )}
                 </div>
                 {recommendedAction.action && (
                   <button
