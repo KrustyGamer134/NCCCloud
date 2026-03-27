@@ -148,6 +148,24 @@ def _route(action: str, plugin_name: str, instance_id: str, payload: dict, admin
             )
             raise
 
+    if action == "add_instance":
+        return admin_api.add_instance(plugin_name, instance_id)
+
+    if action == "allocate_instance_ports":
+        return admin_api.allocate_instance_ports(plugin_name)
+
+    if action == "configure_instance":
+        return admin_api.configure_instance(
+            plugin_name,
+            instance_id,
+            payload.get("map_name") or payload.get("map") or "",
+            int(payload.get("game_port") or 0),
+            int(payload.get("rcon_port") or 0),
+            mods=payload.get("mods") or [],
+            passive_mods=payload.get("passive_mods") or [],
+            map_mod=payload.get("map_mod"),
+        )
+
     if action == "install_deps":
         return admin_api.install_deps(plugin_name, instance_id)
 

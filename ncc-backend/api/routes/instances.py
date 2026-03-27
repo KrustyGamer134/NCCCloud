@@ -45,6 +45,114 @@ class DiscoverBody(BaseModel):
     agent_id: str | None = None
 
 
+async def _provision_instance_on_agent(
+    *,
+    inst: Instance,
+    plugin_json: dict,
+    request: Request,
+    tenant_id: str,
+    db: AsyncSession,
+) -> dict:
+    if inst.agent_id is None:
+        return {}
+
+    agent_id_str = str(inst.agent_id)
+    if not is_agent_connected(agent_id_str):
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Agent is not connected", "code": "AGENT_OFFLINE"},
+        )
+
+    created = await send_command(
+        agent_id=agent_id_str,
+        command="add-instance",
+        payload={
+            "instance_id": str(inst.instance_id),
+            "plugin_name": inst.plugin_id,
+            "game_system_id": inst.plugin_id,
+            "plugin_json": plugin_json,
+        },
+    )
+    if created.get("status") != "success":
+        raise HTTPException(status_code=409, detail=created)
+
+    config_json = dict(inst.config_json or {})
+    map_name = str(config_json.get("map") or config_json.get("map_name") or "").strip()
+    if not map_name:
+        return config_json
+
+    try:
+        game_port = int(config_json.get("game_port") or 0)
+    except (TypeError, ValueError):
+        game_port = 0
+    try:
+        rcon_port = int(config_json.get("rcon_port") or 0)
+    except (TypeError, ValueError):
+        rcon_port = 0
+
+    if game_port <= 0 or rcon_port <= 0:
+        allocated = await send_command(
+            agent_id=agent_id_str,
+            command="allocate-instance-ports",
+            payload={
+                "plugin_name": inst.plugin_id,
+                "game_system_id": inst.plugin_id,
+                "plugin_json": plugin_json,
+            },
+        )
+        if allocated.get("status") != "success":
+            raise HTTPException(status_code=409, detail=allocated)
+        allocated_data = allocated.get("data") if isinstance(allocated.get("data"), dict) else {}
+        try:
+            game_port = int(allocated_data.get("game_port") or 0)
+            rcon_port = int(allocated_data.get("rcon_port") or 0)
+        except (TypeError, ValueError):
+            game_port = 0
+            rcon_port = 0
+        if game_port <= 0 or rcon_port <= 0:
+            raise HTTPException(
+                status_code=409,
+                detail={"error": "Failed to allocate instance ports", "code": "PROVISION_FAILED"},
+            )
+
+    configured = await send_command(
+        agent_id=agent_id_str,
+        command="configure-instance",
+        payload={
+            "instance_id": str(inst.instance_id),
+            "plugin_name": inst.plugin_id,
+            "game_system_id": inst.plugin_id,
+            "plugin_json": plugin_json,
+            "map_name": map_name,
+            "game_port": game_port,
+            "rcon_port": rcon_port,
+            "mods": config_json.get("mods") or [],
+            "passive_mods": config_json.get("passive_mods") or [],
+            "map_mod": config_json.get("map_mod"),
+        },
+    )
+    if configured.get("status") != "success":
+        raise HTTPException(status_code=409, detail=configured)
+
+    config_json["map"] = map_name
+    config_json["game_port"] = game_port
+    config_json["rcon_port"] = rcon_port
+    inst.config_json = config_json
+    db.add(inst)
+
+    await write_audit_log(
+        db=db,
+        tenant_id=tenant_id,
+        action="instance.provision",
+        outcome="success",
+        user_id=getattr(request.state, "user_id", None),
+        agent_id=inst.agent_id,
+        instance_id=inst.instance_id,
+        detail={"plugin_id": inst.plugin_id, "game_system_id": inst.plugin_id},
+    )
+    return config_json
+
+
 async def _get_instance(
     instance_id: str, tenant_id: str, db: AsyncSession
 ) -> Instance:
@@ -170,6 +278,22 @@ async def create_instance(
         status="unknown",
         install_status="not_installed",
     )
+    db.add(inst)
+    await db.flush()
+
+    catalog_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    catalog_row = catalog_result.scalar_one_or_none()
+    plugin_json = catalog_row.plugin_json if catalog_row else {}
+
+    inst.config_json = await _provision_instance_on_agent(
+        inst=inst,
+        plugin_json=plugin_json,
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    ) or inst.config_json
     db.add(inst)
     await db.flush()
 
