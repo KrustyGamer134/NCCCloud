@@ -1,0 +1,6 @@
+{
+  "admin_password": "e2e",
+  "default_rcon_port_start": 29000,
+  "rcon_enabled": true,
+  "schema_version": 1
+}

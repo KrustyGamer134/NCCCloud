@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "name": "e2e_harness",
+  "game_id": "e2e_harness",
+  "display_name": "E2E Harness",
+  "version": "1.0.0",
+  "executable": "fake_server.py",
+  "install_subfolder": "E2EHarness",
+  "process_names": [],
+  "stop_wait_seconds": 30,
+  "launch_prefix": [
+    "{python}"
+  ],
+  "launch_args": [
+    "--rcon-port={rcon_port}",
+    "--password={admin_password}"
+  ],
+  "start_ready_signal": "READY",
+  "required_ports": [
+    {
+      "name": "rcon",
+      "proto": "tcp"
+    }
+  ],
+  "rcon": {
+    "host": "127.0.0.1",
+    "port_field": "rcon_port",
+    "password_field": "admin_password",
+    "commands": {
+      "stop": [
+        "SaveWorld",
+        "DoExit"
+      ],
+      "save": [
+        "SaveWorld"
+      ],
+      "broadcast": [
+        "Broadcast {message}"
+      ]
+    }
+  },
+  "app_settings": {
+    "admin_password": {
+      "use": "policy",
+      "label": "Admin Password",
+      "type": "password",
+      "value": "e2e"
+    },
+    "rcon_enabled": {
+      "use": "policy",
+      "label": "RCON Enabled",
+      "type": "bool",
+      "value": true
+    }
+  },
+  "server_settings": {
+    "rcon_port": {
+      "use": "policy",
+      "label": "RCON Port",
+      "type": "int",
+      "value": 29001
+    },
+    "admin_password": {
+      "use": "policy",
+      "label": "Admin Password",
+      "type": "password",
+      "value": "e2e"
+    }
+  }
+}

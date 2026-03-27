@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "name": "ark",
+  "game_id": "ark_survival_ascended",
+  "display_name": "ARK: Survival Ascended",
+  "version": "1.0.0",
+  "steam_app_id": "2430930",
+  "executable": "ShooterGame\\Binaries\\Win64\\ArkAscendedServer.exe",
+  "install_subfolder": "ArkSA",
+  "master_distribution_excludes": [
+    "ShooterGame/Saved",
+    "logs",
+    "tmp"
+  ],
+  "server_log_path": "ShooterGame/Saved/Logs/ShooterGame.log",
+  "ready_signal": "Server has completed startup and is now advertising for join.",
+  "process_names": ["ArkAscendedServer.exe", "ShooterGameServer.exe"],
+  "stop_wait_seconds": 60,
+  "launch_template": "{executable} {map}{mods}{passive_mods}",
+  "required_ports": [
+    {"name": "game", "proto": "udp"},
+    {"name": "rcon", "proto": "tcp"}
+  ],
+  "rcon": {
+    "host": "127.0.0.1",
+    "port_field": "rcon_port",
+    "password_field": "admin_password",
+    "commands": {
+      "stop": ["SaveWorld", "DoExit"],
+      "save": ["SaveWorld"],
+      "broadcast": ["Broadcast {message}"]
+    }
+  },
+  "ini_settings": {
+    "file": "ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini",
+    "fields": {
+      "max_players":    {"section": "/Script/Engine.GameSession", "keys": ["WinLiveMaxPlayers", "MaxPlayers"]},
+      "mods":           {"section": "ServerSettings",  "key": "ActiveMods"},
+      "passive_mods":   {"section": "ServerSettings",  "key": "passivemods"},
+      "pve":            {"section": "ServerSettings",  "key": "serverPVE"},
+      "rcon_port":      {"section": "ServerSettings",  "key": "RCONPort"},
+      "rcon_enabled":   {"section": "ServerSettings",  "key": "RCONEnabled"},
+      "admin_password": {"section": "ServerSettings",  "key": "ServerAdminPassword"},
+      "server_name":    {"section": "SessionSettings", "key": "SessionName"},
+      "game_port":      {"section": "SessionSettings", "key": "Port"}
+    }
+  },
+  "dependencies": [
+    {
+      "id": "vcredist_2013_x64",
+      "label": "Microsoft Visual C++ 2013 Redistributable x64",
+      "type": "windows_component",
+      "install": "auto",
+      "platforms": ["windows"],
+      "guidance": "Install Microsoft Visual C++ 2013 Redistributable (x64) on this Windows server."
+    },
+    {
+      "id": "directx_june_2010",
+      "label": "DirectX End-User Runtimes (June 2010)",
+      "type": "windows_component",
+      "install": "auto",
+      "platforms": ["windows"],
+      "guidance": "Install DirectX End-User Runtimes (June 2010) on this Windows server."
+    },
+    {
+      "id": "ark_certificate_r2m02",
+      "label": "Amazon Trust Certificate (r2m02.crl)",
+      "type": "windows_certificate",
+      "install": "manual",
+      "platforms": ["windows_server"],
+      "guidance": "Download r2m02.crl from http://crl.r2m02.amazontrust.com/r2m02.crl, right-click the file, select Install Certificate, place in Trusted Root Certification Authorities. A system restart may be required."
+    }
+  ],
+  "maps": {
+    "TheIsland_WP":     {"display_name": "The Island"},
+    "ScorchedEarth_WP": {"display_name": "Scorched Earth"}
+  },
+  "app_settings": {
+    "display_name": {
+      "use":   "ini_setting",
+      "label": "Display Name Prefix",
+      "type":  "string",
+      "value": ""
+    },
+    "admin_password": {
+      "use":   "ini_setting",
+      "label": "Admin Password",
+      "type":  "password",
+      "value": "changeme"
+    },
+    "rcon_enabled": {
+      "use":   "ini_setting",
+      "label": "RCON Enabled",
+      "type":  "bool",
+      "value": true
+    },
+    "pve": {
+      "use":   "ini_setting",
+      "label": "PvE",
+      "type":  "bool",
+      "value": true
+    },
+    "auto_update_on_restart": {
+      "use":   "policy",
+      "label": "Auto Update On Restart",
+      "type":  "bool",
+      "value": false
+    },
+    "cluster_id": {
+      "use":   "launch_arg",
+      "label": "Cluster ID",
+      "type":  "string",
+      "value": ""
+    },
+    "max_players": {
+      "use":   "ini_setting",
+      "label": "Max Players",
+      "type":  "int",
+      "value": 20
+    },
+    "mods": {
+      "use":   "mod_list",
+      "label": "Active Mods (all instances)",
+      "type":  "list",
+      "value": []
+    },
+    "passive_mods": {
+      "use":   "mod_list",
+      "label": "Passive Mods (all instances)",
+      "type":  "list",
+      "value": []
+    }
+  },
+  "server_settings": {
+    "map": {
+      "use":   "launch_arg",
+      "label": "Map",
+      "type":  "string",
+      "value": "TheIsland_WP"
+    },
+    "game_port": {
+      "use":   "ini_setting",
+      "label": "Game Port",
+      "type":  "int",
+      "value": 7777
+    },
+    "rcon_port": {
+      "use":   "ini_setting",
+      "label": "RCON Port",
+      "type":  "int",
+      "value": 27020
+    },
+    "rcon_enabled": {
+      "use":   "ini_setting",
+      "label": "RCON Enabled",
+      "type":  "bool",
+      "value": true
+    },
+    "admin_password": {
+      "use":   "ini_setting",
+      "label": "Admin Password",
+      "type":  "password",
+      "value": ""
+    },
+    "max_players": {
+      "use":   "ini_setting",
+      "label": "Max Players",
+      "type":  "int",
+      "value": 20
+    },
+    "server_name": {
+      "use":   "ini_setting",
+      "label": "Server Name",
+      "type":  "string",
+      "value": "My Server"
+    },
+    "mods": {
+      "use":   "launch_arg",
+      "label": "Active Mods (additive)",
+      "type":  "list",
+      "value": []
+    },
+    "passive_mods": {
+      "use":   "launch_arg",
+      "label": "Passive Mods (additive)",
+      "type":  "list",
+      "value": []
+    },
+    "map_mod": {
+      "use":   "launch_arg",
+      "label": "Map Mod",
+      "type":  "string",
+      "value": ""
+    }
+  }
+}

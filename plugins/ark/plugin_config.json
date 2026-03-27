@@ -1,0 +1,16 @@
+{
+  "admin_password": "fjfhg676",
+  "auto_update_on_restart": false,
+  "cluster_id": "6746465",
+  "default_game_port_start": 7777,
+  "default_rcon_port_start": 27020,
+  "display_name": "ArkBackup",
+  "install_root": "E:\\ArkBackup",
+  "max_players": 20,
+  "mods": [],
+  "passive_mods": [],
+  "pve": true,
+  "rcon_enabled": true,
+  "schema_version": 1,
+  "test_mode": false
+}

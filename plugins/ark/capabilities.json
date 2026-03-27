@@ -1,0 +1,42 @@
+﻿{
+  "schema_version": 1,
+  "install_server_app_id": "2430930",
+  "default_server_executable": "ArkAscendedServer.exe",
+  "default_install_subdirectory": "asa_server",
+  "steamcmd_progress_metadata_name": "steamcmd_progress_source.json",
+  "install_server_log_tail_lines": 50,
+  "runtime_status_log_tail_lines": 400,
+  "runtime_version_log_tail_lines": 200,
+  "runtime_ready_signal": "Server has completed startup and is now advertising for join.",
+  "runtime_process_names": [
+    "ArkAscendedServer.exe",
+    "ShooterGameServer.exe"
+  ],
+  "runtime_tasklist_timeout_seconds": 2.0,
+  "bootstrap_config_wait_seconds": 15.0,
+  "stop_wait_seconds": 60.0,
+  "required_launch_fields": [
+    "map",
+    "game_port",
+    "rcon_port",
+    "admin_password"
+  ],
+  "required_ports": [
+    {
+      "name": "game",
+      "proto": "udp"
+    },
+    {
+      "name": "rcon",
+      "proto": "tcp"
+    }
+  ],
+  "maps": {
+    "TheIsland_WP": {
+      "display_name": "The Island"
+    },
+    "ScorchedEarth_WP": {
+      "display_name": "Scorched Earth"
+    }
+  }
+}

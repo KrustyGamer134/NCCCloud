@@ -1,0 +1,151 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
+
+export async function fetchPlugins(token: string) {
+  const res = await fetch(`${API_URL}/plugins`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch plugins");
+  return res.json();
+}
+
+export async function fetchAppSettings(token: string) {
+  const res = await fetch(`${API_URL}/settings/app`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch app settings");
+  return res.json();
+}
+
+export async function saveAppSettings(token: string, settings_json: Record<string, unknown>) {
+  const res = await fetch(`${API_URL}/settings/app`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ settings_json }),
+  });
+  if (!res.ok) throw new Error("Failed to save app settings");
+  return res.json();
+}
+
+export async function fetchPluginSettings(token: string, pluginName: string) {
+  const res = await fetch(`${API_URL}/settings/plugins/${encodeURIComponent(pluginName)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Failed to fetch settings for plugin ${pluginName}`);
+  return res.json();
+}
+
+export async function savePluginSettings(
+  token: string,
+  pluginName: string,
+  plugin_json: Record<string, unknown>,
+) {
+  const res = await fetch(`${API_URL}/settings/plugins/${encodeURIComponent(pluginName)}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ plugin_json }),
+  });
+  if (!res.ok) throw new Error(`Failed to save settings for plugin ${pluginName}`);
+  return res.json();
+}
+
+export async function saveInstanceConfig(
+  token: string,
+  instanceId: string,
+  config_json: Record<string, unknown>,
+) {
+  const res = await fetch(
+    `${API_URL}/settings/instances/${encodeURIComponent(instanceId)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ config_json }),
+    },
+  );
+  if (!res.ok) throw new Error(`Failed to save config for instance ${instanceId}`);
+  return res.json();
+}
+
+export async function createInstance(
+  token: string,
+  body: { plugin_id: string; display_name: string; agent_id?: string },
+) {
+  const res = await fetch(`${API_URL}/instances`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.error ?? `Failed to create instance (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function deleteInstance(token: string, instanceId: string) {
+  const res = await fetch(`${API_URL}/instances/${encodeURIComponent(instanceId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.error ?? `Failed to delete instance (${res.status})`);
+  }
+}
+
+export async function discoverInstances(token: string, agentId?: string) {
+  const res = await fetch(`${API_URL}/instances/discover`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(agentId ? { agent_id: agentId } : {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.error ?? `Discover failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchAgents(token: string) {
+  const res = await fetch(`${API_URL}/agents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  console.log("AGENTS STATUS:", res.status);
+
+  const text = await res.text();
+  console.log("AGENTS RESPONSE:", text);
+
+  if (!res.ok) throw new Error("Failed to fetch agents");
+
+  return JSON.parse(text);
+}
+
+export async function fetchInstances(token: string) {
+  const res = await fetch(`${API_URL}/instances`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  console.log("INSTANCES STATUS:", res.status);
+
+  const text = await res.text();
+  console.log("INSTANCES RESPONSE:", text);
+
+  if (!res.ok) throw new Error("Failed to fetch instances");
+
+  return JSON.parse(text);
+}

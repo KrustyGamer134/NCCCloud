@@ -1,0 +1,118 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# Virtual envs
+# =========================
+.venv/
+venv/
+env/
+
+# =========================
+# Tool / test output
+# =========================
+code_review_reports/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# =========================
+# IDE / editor
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS junk
+# =========================
+Thumbs.db
+.DS_Store
+
+# =========================
+# Local runtime / machine-specific state
+# =========================
+state/app_dependency_state.json
+data/
+logs/
+tmp/
+temp/
+
+# =========================
+# Local app/runtime settings
+# keep defaults/templates tracked instead
+# =========================
+app_settings.local.json
+app_settings.user.json
+app_settings.json
+
+# =========================
+# Game server runtime artifacts
+# =========================
+*.pid
+*.lock
+
+# =========================
+# PowerShell transcripts / scratch
+# =========================
+*.tmp
+*.bak
+
+# pytest game servers
+.pytest_gameservers/
+
+# instance runtime data
+plugins/*/instances/
+
+# local cluster config
+cluster_config.json
+state/
+support/version_build_map.json
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# NCC Backend
+# =========================
+ncc-backend/.env
+ncc-backend/.env.local
+
+# =========================
+# NCC Agent
+# =========================
+ncc-agent/.env
+ncc-agent/.env.local
+ncc-agent/agent_state.json
+
+# =========================
+# Node / Frontend
+# =========================
+node_modules/
+.next/
+ncc-frontend/.env
+ncc-frontend/.env.local
+
+# =========================
+# Archived legacy material
+# =========================
+legacy_desktop_archive/
+
+.claude/
