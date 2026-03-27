@@ -127,6 +127,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const progressState = detail?.install_progress?.data?.state ?? "not_started";
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
+  const agentOnline = Boolean(detail?.instance.agent_online);
   const shouldAutoRefresh =
     pendingAction !== null ||
     ["starting", "stopping", "restarting"].includes(String(statusState).toLowerCase()) ||
@@ -139,6 +140,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     progressState,
     runtimeReady,
   });
+  const actionsDisabled = pendingAction !== null || !agentOnline;
 
   useEffect(() => {
     if (!instanceId || !shouldAutoRefresh) return;
@@ -199,30 +201,33 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             {shouldAutoRefresh && (
               <span className="text-xs text-gray-500">Auto-refreshing</span>
             )}
+            {!agentOnline && (
+              <span className="text-xs text-red-400">Agent offline</span>
+            )}
             <button
               onClick={() => void handleAction("install-server")}
-              disabled={pendingAction !== null}
+              disabled={actionsDisabled}
               className="rounded border border-blue-700 bg-blue-900 px-3 py-1.5 text-sm text-blue-200 hover:border-blue-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "install-server" ? "Installing..." : "Install"}
             </button>
             <button
               onClick={() => void handleAction("start")}
-              disabled={pendingAction !== null}
+              disabled={actionsDisabled}
               className="rounded border border-green-700 bg-green-900 px-3 py-1.5 text-sm text-green-200 hover:border-green-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "start" ? "Starting..." : "Start"}
             </button>
             <button
               onClick={() => void handleAction("stop")}
-              disabled={pendingAction !== null}
+              disabled={actionsDisabled}
               className="rounded border border-red-700 bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:border-red-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "stop" ? "Stopping..." : "Stop"}
             </button>
             <button
               onClick={() => void handleAction("restart")}
-              disabled={pendingAction !== null}
+              disabled={actionsDisabled}
               className="rounded border border-yellow-700 bg-yellow-900 px-3 py-1.5 text-sm text-yellow-200 hover:border-yellow-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "restart" ? "Restarting..." : "Restart"}
@@ -260,7 +265,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
                 {recommendedAction.action && (
                   <button
                     onClick={() => void handleAction(recommendedAction.action)}
-                    disabled={pendingAction !== null}
+                    disabled={actionsDisabled}
                     className="shrink-0 rounded border border-blue-600 bg-blue-800 px-3 py-1.5 text-sm text-white hover:border-blue-500 hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     {pendingAction === recommendedAction.action
