@@ -3,6 +3,7 @@
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   createInstance,
   deleteInstance,
@@ -108,6 +109,7 @@ function TrashIcon() {
 
 export default function InstancesPage() {
   const { getToken } = useAuth();
+  const router = useRouter();
 
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -268,7 +270,7 @@ export default function InstancesPage() {
     setAddError(null);
     try {
       const token = await getToken();
-      await createInstance(token!, {
+      const created = await createInstance(token!, {
         display_name: form.display_name.trim(),
         plugin_id: form.plugin_id,
         agent_id: form.agent_id || undefined,
@@ -276,7 +278,7 @@ export default function InstancesPage() {
       });
       setShowModal(false);
       setForm(EMPTY_FORM);
-      await loadInstances();
+      router.push(`/instances/${encodeURIComponent(created.instance_id)}`);
     } catch (e: any) {
       setAddError(e.message ?? "Unknown error");
     } finally {
