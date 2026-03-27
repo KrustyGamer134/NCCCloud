@@ -234,6 +234,17 @@ def test_adminapi_instance_config_marks_only_target_instance_dirty(tmp_path):
     assert orch.invalidate_runtime_calls == [("ark", "10")]
 
 
+def test_adminapi_instance_config_returns_apply_result_from_sync(tmp_path):
+    orch = _StubOrchestrator(tmp_path)
+    api = AdminAPI(orch)
+
+    resp = api.set_instance_plugin_config_fields("ark", "10", {"server_name": "Ark Cloud"})
+
+    assert resp["status"] == "success"
+    assert resp["data"]["apply_result"] == {"status": "success", "data": {"ok": True}}
+    assert orch.sync_instance_ini_calls == [("ark", "10", ["server_name"])]
+
+
 def test_adminapi_add_instance_marks_only_new_instance_dirty(tmp_path):
     orch = _StubOrchestrator(tmp_path)
     api = AdminAPI(orch)

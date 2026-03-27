@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.routes.agents import is_agent_connected
+from core.agent_relay import send_command
 from core.tenant import require_tenant
 from db.models import Instance, PluginCatalog, TenantSettings
 from db.session import get_db
@@ -38,6 +40,7 @@ class PluginSettingsBody(BaseModel):
 class InstanceConfigResponse(BaseModel):
     instance_id: str
     config_json: dict
+    apply_result: dict | None = None
 
 
 class InstanceConfigBody(BaseModel):
@@ -180,10 +183,105 @@ async def put_instance_config(
             status_code=404,
             detail={"error": "Instance not found", "code": "NOT_FOUND"},
         )
-    inst.config_json = body.config_json
+    previous_config = dict(inst.config_json or {})
+    next_config = dict(body.config_json or {})
+    inst.config_json = next_config
     db.add(inst)
     await db.flush()
+
+    changed_fields: dict[str, object | None] = {}
+    all_keys = set(previous_config) | set(next_config)
+    for key in all_keys:
+        previous_value = previous_config.get(key)
+        next_value = next_config.get(key)
+        if previous_value != next_value:
+            changed_fields[str(key)] = next_value if key in next_config else None
+
+    apply_result: dict | None = None
+    if changed_fields:
+        if inst.agent_id is None:
+            apply_result = {
+                "status": "pending",
+                "data": {
+                    "applied": False,
+                    "deferred": True,
+                    "requires_restart": False,
+                    "reason": "no_agent",
+                    "updated_fields": sorted(changed_fields.keys()),
+                    "warnings": ["Config was saved, but no agent is assigned to apply it."],
+                },
+            }
+        else:
+            agent_id_str = str(inst.agent_id)
+            if not is_agent_connected(agent_id_str):
+                apply_result = {
+                    "status": "pending",
+                    "data": {
+                        "applied": False,
+                        "deferred": True,
+                        "requires_restart": False,
+                        "reason": "agent_offline",
+                        "updated_fields": sorted(changed_fields.keys()),
+                        "warnings": ["Config was saved, but the assigned agent is offline."],
+                    },
+                }
+            else:
+                plugin_result = await db.execute(
+                    select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+                )
+                plugin = plugin_result.scalar_one_or_none()
+                plugin_json = plugin.plugin_json if plugin else {}
+                agent_result = await send_command(
+                    agent_id=agent_id_str,
+                    command="set-instance-plugin-config-fields",
+                    payload={
+                        "instance_id": str(inst.instance_id),
+                        "plugin_name": inst.plugin_id,
+                        "plugin_json": plugin_json,
+                        "fields": changed_fields,
+                    },
+                )
+                apply_data = (
+                    agent_result.get("data")
+                    if isinstance(agent_result.get("data"), dict)
+                    else {}
+                )
+                sync_result = (
+                    apply_data.get("apply_result")
+                    if isinstance(apply_data.get("apply_result"), dict)
+                    else None
+                )
+                sync_data = (
+                    sync_result.get("data")
+                    if isinstance(sync_result, dict) and isinstance(sync_result.get("data"), dict)
+                    else {}
+                )
+                apply_result = {
+                    "status": agent_result.get("status", "unknown"),
+                    "data": {
+                        "applied": agent_result.get("status") == "success" and not bool(sync_data.get("deferred")),
+                        "deferred": bool(sync_data.get("deferred")),
+                        "requires_restart": bool(sync_data.get("deferred")),
+                        "updated_fields": apply_data.get("updated_fields") or sorted(changed_fields.keys()),
+                        "warnings": sync_data.get("warnings") or [],
+                    },
+                }
+                if agent_result.get("status") != "success":
+                    apply_result["message"] = str(agent_result.get("message") or "Failed to apply config on host")
+    else:
+        apply_result = {
+            "status": "success",
+            "data": {
+                "applied": True,
+                "deferred": False,
+                "requires_restart": False,
+                "updated_fields": [],
+                "warnings": [],
+            },
+        }
+
     return InstanceConfigResponse(
         instance_id=str(inst.instance_id),
         config_json=inst.config_json,
+        apply_result=apply_result,
     )

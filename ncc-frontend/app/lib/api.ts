@@ -62,6 +62,23 @@ export interface PluginSummary {
   provisioning?: PluginProvisioningMetadata | null;
 }
 
+export interface InstanceConfigSaveResponse {
+  instance_id: string;
+  config_json: Record<string, unknown>;
+  apply_result?: {
+    status?: string;
+    message?: string;
+    data?: {
+      applied?: boolean;
+      deferred?: boolean;
+      requires_restart?: boolean;
+      reason?: string;
+      updated_fields?: string[];
+      warnings?: string[];
+    };
+  } | null;
+}
+
 export async function fetchPlugins(token: string): Promise<PluginSummary[]> {
   const res = await fetch(`${API_URL}/plugins`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -120,7 +137,7 @@ export async function saveInstanceConfig(
   token: string,
   instanceId: string,
   config_json: Record<string, unknown>,
-) {
+): Promise<InstanceConfigSaveResponse> {
   const res = await fetch(
     `${API_URL}/settings/instances/${encodeURIComponent(instanceId)}`,
     {

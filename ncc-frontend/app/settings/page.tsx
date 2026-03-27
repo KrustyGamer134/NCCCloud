@@ -12,6 +12,7 @@ import {
   savePluginSettings,
   fetchInstances,
   saveInstanceConfig,
+  type InstanceConfigSaveResponse,
 } from "../lib/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -904,6 +905,7 @@ function InstanceConfigTab({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [applyNote, setApplyNote] = useState<string | null>(null);
   const requestedInstance = initialInstanceId
     ? instances.find((inst) => inst.instance_id === initialInstanceId) ?? null
     : null;
@@ -918,6 +920,7 @@ function InstanceConfigTab({
     setActiveId(inst.instance_id);
     setError(null);
     setSuccess(false);
+    setApplyNote(null);
     setForm(instanceConfigToForm(inst.config_json ?? {}));
   }
 
@@ -940,10 +943,28 @@ function InstanceConfigTab({
     setSaving(true);
     setError(null);
     setSuccess(false);
+    setApplyNote(null);
     try {
       const token = await getToken();
-      await saveInstanceConfig(token!, activeId, formToInstanceConfig(form));
+      const response: InstanceConfigSaveResponse = await saveInstanceConfig(
+        token!,
+        activeId,
+        formToInstanceConfig(form),
+      );
       setSuccess(true);
+      const applyResult = response.apply_result;
+      const applyData = applyResult?.data;
+      if (applyResult?.status === "pending") {
+        setApplyNote(applyData?.warnings?.[0] ?? "Saved. Host apply is pending.");
+      } else if (applyResult?.status === "success" && applyData?.deferred) {
+        setApplyNote(
+          applyData?.warnings?.[0] ?? "Saved. Host apply is deferred until stop/start.",
+        );
+      } else if (applyResult?.status === "success" && applyData?.applied) {
+        setApplyNote("Saved and applied on the host.");
+      } else if (applyResult?.message) {
+        setApplyNote(`Saved, but host apply failed: ${applyResult.message}`);
+      }
       setTimeout(() => setSuccess(false), 3000);
     } catch (e: any) {
       setError(e.message ?? "Failed to save.");
@@ -1104,6 +1125,9 @@ function InstanceConfigTab({
                   onSave={handleSave}
                   label="Save Instance Config"
                 />
+                {applyNote && (
+                  <div className="mt-3 text-sm text-gray-400">{applyNote}</div>
+                )}
                 {success && activeInstance && (
                   <div className="mt-3 text-sm">
                     <Link

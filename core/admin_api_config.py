@@ -589,15 +589,17 @@ class _AdminAPIConfigMixin:
             invalidate_runtime_summary(str(plugin_name), str(instance_id))
 
         sync_ini_fields = sorted([str(k) for k in fields.keys() if str(k) in self._INI_SYNC_FIELDS])
+        sync_result = None
         sync_method = self._get_optional_orchestrator_method("sync_instance_ini_fields")
         if callable(sync_method) and sync_ini_fields:
-            sync_method(str(plugin_name), str(instance_id), sync_ini_fields)
+            sync_result = sync_method(str(plugin_name), str(instance_id), sync_ini_fields)
 
         return {
             "status": "success",
             "data": {
                 "path": str(path),
                 "updated_fields": sorted([str(k) for k in fields.keys()]),
+                "apply_result": sync_result,
             },
         }
 

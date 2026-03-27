@@ -950,15 +950,17 @@ class AdminAPI:
             invalidate_runtime_summary(str(plugin_name), str(instance_id))
 
         sync_ini_fields = sorted([str(k) for k in fields.keys() if str(k) in self._INI_SYNC_FIELDS])
+        sync_result = None
         sync_method = _orch_method(self._orchestrator, "sync_instance_ini_fields")
         if callable(sync_method) and sync_ini_fields:
-            sync_method(str(plugin_name), str(instance_id), sync_ini_fields)
+            sync_result = sync_method(str(plugin_name), str(instance_id), sync_ini_fields)
 
         return {
             "status": "success",
             "data": {
                 "path": str(path),
                 "updated_fields": sorted([str(k) for k in fields.keys()]),
+                "apply_result": sync_result,
             },
         }
 
@@ -1671,7 +1673,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

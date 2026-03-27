@@ -167,6 +167,13 @@ def _route(action: str, plugin_name: str, instance_id: str, payload: dict, admin
             map_mod=payload.get("map_mod"),
         )
 
+    if action == "set_instance_plugin_config_fields":
+        return admin_api.set_instance_plugin_config_fields(
+            plugin_name,
+            instance_id,
+            payload.get("fields") or {},
+        )
+
     if action == "install_deps":
         return admin_api.install_deps(plugin_name, instance_id)
 
