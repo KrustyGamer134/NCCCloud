@@ -176,6 +176,7 @@ export default function InstancesPage() {
       plugin?.provisioning?.default_map ?? plugin?.provisioning?.maps?.[0]?.id ?? "";
     setForm((current) => ({
       ...current,
+      display_name: current.display_name || nextMap,
       plugin_id: pluginId,
       map: nextMap,
     }));
@@ -774,7 +775,11 @@ export default function InstancesPage() {
                       <select
                         value={form.map}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, map: e.target.value }))
+                          setForm((f) => ({
+                            ...f,
+                            display_name: f.display_name || e.target.value,
+                            map: e.target.value,
+                          }))
                         }
                         className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                       >
