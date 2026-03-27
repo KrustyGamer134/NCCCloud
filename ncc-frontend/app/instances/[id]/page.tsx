@@ -73,6 +73,21 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const progressState = detail?.install_progress?.data?.state ?? "not_started";
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
+  const shouldAutoRefresh =
+    pendingAction !== null ||
+    ["starting", "stopping", "restarting"].includes(String(statusState).toLowerCase()) ||
+    ["queued", "running", "installing", "starting"].includes(String(installStatus).toLowerCase()) ||
+    ["queued", "running", "installing", "starting"].includes(String(progressState).toLowerCase());
+
+  useEffect(() => {
+    if (!instanceId || !shouldAutoRefresh) return;
+
+    const timer = window.setTimeout(() => {
+      void loadDetail();
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [detail, instanceId, loadDetail, shouldAutoRefresh]);
 
   async function handleAction(action: "install-server" | "start" | "stop" | "restart") {
     if (!instanceId) return;
@@ -120,6 +135,9 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             <p className="mt-1 text-sm text-gray-500">{detail?.instance.plugin_id ?? "loading"} · {instanceId}</p>
           </div>
           <div className="flex items-center gap-2">
+            {shouldAutoRefresh && (
+              <span className="text-xs text-gray-500">Auto-refreshing</span>
+            )}
             <button
               onClick={() => void handleAction("install-server")}
               disabled={pendingAction !== null}
