@@ -128,6 +128,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
   const steamcmdLogLines = detail?.install_progress?.data?.steamcmd_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
+  const configuredMap = String(detail?.instance.config_json?.map ?? "unset");
   const agentOnline = Boolean(detail?.instance.agent_online);
   const shouldAutoRefresh =
     pendingAction !== null ||
@@ -197,6 +198,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <h1 className="text-3xl font-bold">{detail?.instance.display_name ?? "Instance"}</h1>
             <p className="mt-1 text-sm text-gray-500">{detail?.instance.plugin_id ?? "loading"} · {instanceId}</p>
+            <p className="mt-1 text-sm text-gray-500">Map: <span className="text-gray-300">{configuredMap}</span></p>
           </div>
           <div className="flex items-center gap-2">
             {shouldAutoRefresh && (
