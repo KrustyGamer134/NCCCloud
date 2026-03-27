@@ -456,8 +456,12 @@ export default function InstancesPage() {
         {loading ? (
           <div className="text-gray-500 text-sm py-12 text-center">Loading…</div>
         ) : instances.length === 0 ? (
-          <div className="text-gray-500 text-sm py-12 text-center">
-            No servers found. Add one or run Discover Servers.
+          <div className="py-12 text-center">
+            <p className="text-sm text-gray-400">No managed servers yet.</p>
+            <p className="mt-2 text-sm text-gray-500">
+              Start with <span className="text-white">Add Server</span> for the ARK managed path.
+              Use <span className="text-white">Discover Servers</span> later for import.
+            </p>
           </div>
         ) : (
           <div className="rounded-lg border border-gray-800 overflow-hidden">
