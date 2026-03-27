@@ -31,6 +31,43 @@ function LogBlock({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
+function resolveRecommendedAction(args: {
+  statusState: string;
+  installStatus: string;
+  progressState: string;
+  runtimeReady: boolean;
+}) {
+  const statusState = String(args.statusState).toLowerCase();
+  const installStatus = String(args.installStatus).toLowerCase();
+  const progressState = String(args.progressState).toLowerCase();
+
+  if (["queued", "running", "installing", "starting"].includes(progressState)) {
+    return {
+      title: "Installation in progress",
+      body: "The host is still working. Stay on this page to watch logs and progress update.",
+    };
+  }
+
+  if (["not_installed", "unknown", "failed", "error"].includes(installStatus)) {
+    return {
+      title: "Install the server",
+      body: "Managed provisioning is complete. Run Install next to place the ARK server files on the host.",
+    };
+  }
+
+  if (statusState !== "running" && !args.runtimeReady) {
+    return {
+      title: "Start the server",
+      body: "The server files are in place. Start the instance to launch the ARK runtime and confirm readiness.",
+    };
+  }
+
+  return {
+    title: "Server is manageable",
+    body: "Use Stop or Restart as needed and monitor runtime state and logs from this page.",
+  };
+}
+
 export default function InstanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { getToken } = useAuth();
   const [instanceId, setInstanceId] = useState("");
@@ -78,6 +115,13 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     ["starting", "stopping", "restarting"].includes(String(statusState).toLowerCase()) ||
     ["queued", "running", "installing", "starting"].includes(String(installStatus).toLowerCase()) ||
     ["queued", "running", "installing", "starting"].includes(String(progressState).toLowerCase());
+  const runtimeReady = Boolean(detail?.status?.data?.runtime_ready);
+  const recommendedAction = resolveRecommendedAction({
+    statusState,
+    installStatus,
+    progressState,
+    runtimeReady,
+  });
 
   useEffect(() => {
     if (!instanceId || !shouldAutoRefresh) return;
@@ -181,6 +225,12 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
           <div className="py-12 text-center text-sm text-gray-500">Loading instance detail…</div>
         ) : detail ? (
           <div className="space-y-6">
+            <section className="rounded-lg border border-blue-800 bg-blue-950/40 p-4">
+              <div className="text-xs uppercase tracking-wide text-blue-300">Next Step</div>
+              <div className="mt-2 text-sm font-medium text-white">{recommendedAction.title}</div>
+              <p className="mt-1 text-sm text-blue-100/80">{recommendedAction.body}</p>
+            </section>
+
             <section className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">Lifecycle</div>
