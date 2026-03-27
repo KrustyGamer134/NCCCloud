@@ -928,6 +928,11 @@ function InstanceConfigTab({
     selectInstance(initialInstance);
   }, [initialInstanceId, instances]);
 
+  useEffect(() => {
+    if (initialInstanceId || activeId !== null || instances.length !== 1) return;
+    selectInstance(instances[0]);
+  }, [activeId, initialInstanceId, instances]);
+
   async function handleSave() {
     if (!activeId) return;
     const validErr = validateInstanceForm(form);
