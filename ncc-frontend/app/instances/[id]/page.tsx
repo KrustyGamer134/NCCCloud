@@ -126,6 +126,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const installStatus = detail?.status?.data?.install_status ?? detail?.instance.install_status ?? "unknown";
   const progressState = detail?.install_progress?.data?.state ?? "not_started";
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
+  const steamcmdLogLines = detail?.install_progress?.data?.steamcmd_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
   const agentOnline = Boolean(detail?.instance.agent_online);
   const shouldAutoRefresh =
@@ -330,8 +331,9 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
               </div>
             </section>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-3">
               <LogBlock title="Install Log" lines={installLogLines} />
+              <LogBlock title="SteamCMD Log" lines={steamcmdLogLines} />
               <LogBlock title="Runtime Log" lines={runtimeLogLines} />
             </div>
           </div>
