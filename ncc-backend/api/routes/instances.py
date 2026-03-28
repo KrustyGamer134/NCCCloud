@@ -80,6 +80,12 @@ def _unwrap_agent_command_result(result: dict) -> tuple[dict, dict]:
     return outer, inner
 
 
+def _effective_agent_command_data(result: dict) -> dict:
+    _outer, inner = _unwrap_agent_command_result(result)
+    nested = inner.get("data") if isinstance(inner.get("data"), dict) else {}
+    return nested or inner
+
+
 def _raise_agent_command_error(result: dict) -> None:
     outer, inner = _unwrap_agent_command_result(result)
     if outer.get("status") != "success":
@@ -143,7 +149,7 @@ async def _provision_instance_on_agent(
             },
         )
         _raise_agent_command_error(allocated)
-        _, allocated_data = _unwrap_agent_command_result(allocated)
+        allocated_data = _effective_agent_command_data(allocated)
         try:
             game_port = int(allocated_data.get("game_port") or 0)
             rcon_port = int(allocated_data.get("rcon_port") or 0)
@@ -153,7 +159,11 @@ async def _provision_instance_on_agent(
         if game_port <= 0 or rcon_port <= 0:
             raise HTTPException(
                 status_code=409,
-                detail={"error": "Failed to allocate instance ports", "code": "PROVISION_FAILED"},
+                detail={
+                    "error": "Failed to allocate instance ports",
+                    "code": "PROVISION_FAILED",
+                    "raw_result": allocated_data,
+                },
             )
 
     configured = await send_command(
