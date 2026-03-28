@@ -50,11 +50,40 @@ def _load_cluster_config_fields(cluster_root: str) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def _load_plugin_defaults_fields(cluster_root: str, plugin_name: str) -> dict:
+    root = Path(str(cluster_root))
+    candidates = (
+        root / "plugins" / str(plugin_name) / "plugin_defaults.json",
+        root / "plugins" / str(plugin_name) / "plugin_config.json",
+    )
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            raw = json.loads(candidate.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if isinstance(raw, dict):
+            return raw
+    return {}
+
+
 def get_instances_root(cluster_root: str, plugin_name: str) -> Path:
     cluster_fields = _load_cluster_config_fields(cluster_root)
-    configured = str(cluster_fields.get("install_root_dir") or "").strip()
-    if configured:
-        return Path(configured) / str(plugin_name)
+    plugin_fields = _load_plugin_defaults_fields(cluster_root, plugin_name)
+
+    gameservers_root = str(cluster_fields.get("gameservers_root") or "").strip()
+    cluster_name = str(cluster_fields.get("cluster_name") or "arkSA").strip() or "arkSA"
+    install_root = str(plugin_fields.get("install_root") or "").strip()
+
+    if gameservers_root:
+        if install_root:
+            install_base = Path(install_root)
+            if not install_base.is_absolute():
+                install_base = Path(gameservers_root) / install_root
+            return install_base / "instances"
+        return Path(gameservers_root) / cluster_name / "instances"
+
     return Path(cluster_root) / "plugins" / str(plugin_name) / "instances"
 
 
@@ -64,7 +93,9 @@ def get_instance_root(cluster_root: str, plugin_name: str, instance_id: str) -> 
 
     Layout:
     Preferred:
-    <install_root_dir>/<plugin_name>/<instance_id>/
+    <gameservers_root>/<install_root>/instances/<instance_id>/
+    or
+    <gameservers_root>/<cluster_name>/instances/<instance_id>/
 
     Legacy fallback:
     <cluster_root>/plugins/<plugin_name>/instances/<instance_id>/
