@@ -57,10 +57,22 @@ function deriveDetailView(args: {
   progressState: string;
   runtimeRunning: boolean;
   runtimeReady: boolean;
+  pendingAction: string | null;
 }) {
-  const lifecycle = normalizeState(args.statusState);
-  const install = normalizeState(args.installStatus);
-  const progress = normalizeState(args.progressState, "not_started");
+  const pendingAction = normalizeState(args.pendingAction, "");
+  const lifecycle = pendingAction === "start"
+    ? "starting"
+    : pendingAction === "restart"
+    ? "restarting"
+    : pendingAction === "stop"
+    ? "stopping"
+    : normalizeState(args.statusState);
+  const install = pendingAction === "install-server" ? "installing" : normalizeState(args.installStatus);
+  const progress = pendingAction === "install-server"
+    ? "running"
+    : pendingAction === "start" || pendingAction === "restart"
+    ? "starting"
+    : normalizeState(args.progressState, "not_started");
   const runtimeRunning = Boolean(args.runtimeRunning);
   const runtimeReady = Boolean(args.runtimeReady);
 
@@ -243,6 +255,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     progressState,
     runtimeRunning,
     runtimeReady,
+    pendingAction,
   });
   const shouldAutoRefresh =
     pendingAction !== null ||
