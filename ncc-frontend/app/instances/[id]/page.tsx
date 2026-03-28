@@ -264,7 +264,14 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     view.stopActive;
   const recommendedAction = resolveRecommendedAction(view);
   const actionDisabled = {
-    "install-server": !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || view.runtimeRunning,
+    "install-server":
+      !agentOnline ||
+      pendingAction !== null ||
+      view.installActive ||
+      view.startActive ||
+      view.stopActive ||
+      view.runtimeRunning ||
+      (view.installed && !view.failed),
     start: !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || !view.installed || view.running,
     stop: !agentOnline || pendingAction !== null || view.installActive || view.stopActive || (!view.running && !view.startActive && !view.runtimeRunning),
     restart: !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || !view.installed || !view.running,
