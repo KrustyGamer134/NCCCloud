@@ -31,6 +31,35 @@ function LogBlock({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
+function ProgressRow({
+  label,
+  status,
+  detail,
+}: {
+  label: string;
+  status: "idle" | "active" | "done" | "error";
+  detail: string;
+}) {
+  const tone =
+    status === "done"
+      ? "border-green-800 bg-green-950/40 text-green-200"
+      : status === "active"
+      ? "border-blue-800 bg-blue-950/40 text-blue-200"
+      : status === "error"
+      ? "border-red-800 bg-red-950/40 text-red-200"
+      : "border-gray-800 bg-gray-950 text-gray-300";
+
+  return (
+    <div className={`rounded-lg border px-3 py-3 ${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium text-white">{label}</div>
+        <StatusBadge label={status === "done" ? "Done" : status === "active" ? "Active" : status === "error" ? "Error" : "Idle"} />
+      </div>
+      <div className="mt-2 text-xs">{detail}</div>
+    </div>
+  );
+}
+
 const ACTIVE_INSTALL_STATES = new Set(["queued", "running", "installing"]);
 const ACTIVE_START_STATES = new Set(["starting", "restarting"]);
 
@@ -49,6 +78,41 @@ function titleCaseState(value: string) {
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function recentProgressLine(lines: string[]) {
+  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
+    const line = String(lines[idx] || "").trim();
+    if (line) return line;
+  }
+  return "";
+}
+
+function resolveLogLines(primary: string[] | undefined, fallback: string[] | undefined) {
+  return Array.isArray(primary) && primary.length > 0 ? primary : Array.isArray(fallback) ? fallback : [];
+}
+
+function deriveValidateProgress(lines: string[], metadata: Record<string, unknown> | null | undefined) {
+  const joined = lines.join("\n").toLowerCase();
+  const metadataText = JSON.stringify(metadata ?? {}).toLowerCase();
+  const validateSeen = joined.includes(" validate") || joined.includes("validating") || metadataText.includes("validate");
+  const successSeen =
+    joined.includes("success! app") ||
+    joined.includes("fully installed") ||
+    joined.includes("steamcmd install complete") ||
+    metadataText.includes("completed");
+  const errorSeen = joined.includes("error") || joined.includes("failed");
+
+  if (errorSeen && validateSeen) {
+    return { status: "error" as const, detail: recentProgressLine(lines) || "Validation reported an error." };
+  }
+  if (validateSeen && !successSeen) {
+    return { status: "active" as const, detail: recentProgressLine(lines) || "SteamCMD validation is running." };
+  }
+  if (validateSeen && successSeen) {
+    return { status: "done" as const, detail: recentProgressLine(lines) || "SteamCMD validation completed." };
+  }
+  return { status: "idle" as const, detail: "Validation has not started yet." };
 }
 
 function deriveDetailView(args: {
@@ -242,9 +306,16 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const progressState = detail?.install_progress?.data?.state ?? "not_started";
   const runtimeRunning = Boolean(detail?.status?.data?.runtime_running);
   const runtimeReady = Boolean(detail?.status?.data?.runtime_ready);
-  const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
-  const steamcmdLogLines = detail?.install_progress?.data?.steamcmd_log_tail ?? [];
-  const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
+  const installLogLines = resolveLogLines(
+    detail?.logs.install_server?.data?.lines,
+    detail?.install_progress?.data?.install_log_tail,
+  );
+  const steamcmdLogLines = resolveLogLines(
+    detail?.logs.steamcmd_install?.data?.lines,
+    detail?.install_progress?.data?.steamcmd_log_tail,
+  );
+  const runtimeLogLines = resolveLogLines(detail?.logs.server?.data?.lines, []);
+  const progressMetadata = detail?.install_progress?.data?.progress_metadata;
   const configuredMap = String(detail?.instance.config_json?.map ?? "unset");
   const agentOnline = Boolean(detail?.instance.agent_online);
   const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
@@ -283,6 +354,15 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     : view.stopActive
     ? "Shutdown progress is coming from the lifecycle snapshot while the host reconciles runtime state."
     : "No active install or lifecycle transition is reported by the backend.";
+  const latestInstallLine = recentProgressLine(installLogLines);
+  const latestSteamcmdLine = recentProgressLine(steamcmdLogLines);
+  const installStepStatus =
+    view.failed ? "error" : view.installActive ? "active" : view.installed ? "done" : "idle";
+  const installStepDetail =
+    latestInstallLine ||
+    latestSteamcmdLine ||
+    (view.installActive ? "Waiting for host install output." : view.installed ? "Server files are present on the host." : "Install has not started yet.");
+  const validateStep = deriveValidateProgress(steamcmdLogLines, progressMetadata);
 
   useEffect(() => {
     if (!instanceId || !shouldAutoRefresh) return;
@@ -477,11 +557,18 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
               </div>
 
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-                <div className="mb-3 text-sm font-medium text-white">Install Metadata</div>
+                <div className="mb-3 text-sm font-medium text-white">Install Progress</div>
                 <p className="mb-3 text-xs text-gray-500">{progressSummary}</p>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-gray-300">
-                  {JSON.stringify(detail.install_progress?.data?.progress_metadata ?? {}, null, 2)}
-                </pre>
+                <div className="space-y-3">
+                  <ProgressRow label="Install files" status={installStepStatus} detail={installStepDetail} />
+                  <ProgressRow label="Validate files" status={validateStep.status} detail={validateStep.detail} />
+                  <div className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-3">
+                    <div className="text-xs uppercase tracking-wide text-gray-500">Progress Metadata</div>
+                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-gray-300">
+                      {JSON.stringify(progressMetadata ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -429,6 +429,14 @@ async def get_instance_detail(
         tenant_id=tenant_id,
         db=db,
     )
+    steamcmd_log = await _safe_agent_read(
+        inst=inst,
+        command="fetch-logs",
+        payload={"log_name": "steamcmd_install", "lines": 50},
+        request=request,
+        tenant_id=tenant_id,
+        db=db,
+    )
     runtime_log = await _safe_agent_read(
         inst=inst,
         command="fetch-logs",
@@ -451,6 +459,7 @@ async def get_instance_detail(
         },
         logs={
             "install_server": install_log,
+            "steamcmd_install": steamcmd_log,
             "server": runtime_log,
         },
     )

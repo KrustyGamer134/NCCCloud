@@ -44,6 +44,10 @@ export interface InstanceDetailResponse {
       status: string;
       data?: { lines?: string[]; [key: string]: unknown };
     } | null;
+    steamcmd_install?: {
+      status: string;
+      data?: { lines?: string[]; [key: string]: unknown };
+    } | null;
     server?: {
       status: string;
       data?: { lines?: string[]; [key: string]: unknown };

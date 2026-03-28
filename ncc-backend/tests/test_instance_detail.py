@@ -48,6 +48,7 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
             _scalar_result(plugin_catalog),
             _scalar_result(plugin_catalog),
             _scalar_result(plugin_catalog),
+            _scalar_result(plugin_catalog),
         ]
     )
     request = types.SimpleNamespace(state=types.SimpleNamespace(user_id="user-1"))
@@ -56,6 +57,7 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
         {"status": "success", "data": {"state": "STOPPED", "install_status": "NOT_INSTALLED"}},
         {"status": "success", "data": {"state": "running"}},
         {"status": "success", "data": {"found": True, "lines": ["install line"]}},
+        {"status": "success", "data": {"found": True, "lines": ["steamcmd line"]}},
         {"status": "success", "data": {"found": True, "lines": ["runtime line"]}},
     ]
 
@@ -82,6 +84,7 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
     assert response.config_apply["data"]["requires_restart"] is True
     assert response.config_apply["data"]["pending_fields"] == ["server_name", "mods"]
     assert response.logs["install_server"]["data"]["lines"] == ["install line"]
+    assert response.logs["steamcmd_install"]["data"]["lines"] == ["steamcmd line"]
     assert response.logs["server"]["data"]["lines"] == ["runtime line"]
     commands = [call.kwargs["command"] for call in mock_send.await_args_list]
-    assert commands == ["get-status", "get-install-progress", "fetch-logs", "fetch-logs"]
+    assert commands == ["get-status", "get-install-progress", "fetch-logs", "fetch-logs", "fetch-logs"]
