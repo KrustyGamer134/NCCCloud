@@ -84,7 +84,7 @@ class PluginRegistry:
         if not name or not isinstance(plugin_json, dict):
             return
         from core.plugin_handler import PluginHandler
-        handler = PluginHandler(plugin_json, "", cluster_root or self._cluster_root or "")
+        handler = PluginHandler(plugin_json, "", cluster_root or self._cluster_root or "", plugin_key=name)
         self._plugins[name] = {
             "handler": handler,
             "metadata": plugin_json,
@@ -142,7 +142,7 @@ class PluginRegistry:
         print(f"Loading plugin: {name}")
 
         from core.plugin_handler import PluginHandler
-        handler = PluginHandler(metadata, plugin_path, self._cluster_root or "")
+        handler = PluginHandler(metadata, plugin_path, self._cluster_root or "", plugin_key=name)
         self._plugins[name] = {
             "handler": handler,
             "metadata": metadata,

@@ -68,6 +68,14 @@ _agent_connections: dict[str, WebSocket] = {}
 _pending_commands: dict[str, asyncio.Future] = {}
 
 _COMMAND_TIMEOUT = 30  # seconds
+_INSTALL_SERVER_TIMEOUT = 60 * 60 * 3  # 3 hours
+
+
+def _command_timeout_for(command_dict: dict[str, Any]) -> float:
+    action = str((command_dict or {}).get("action") or "").strip().lower()
+    if action == "install_server":
+        return float(_INSTALL_SERVER_TIMEOUT)
+    return float(_COMMAND_TIMEOUT)
 
 
 # ---------------------------------------------------------------------------
@@ -367,12 +375,13 @@ async def send_command_to_agent(agent_id: str, command_dict: dict) -> dict:
     loop = asyncio.get_event_loop()
     future: asyncio.Future = loop.create_future()
     _pending_commands[command_id] = future
+    timeout_seconds = _command_timeout_for(command_dict)
 
     try:
         payload = {**command_dict, "command_id": command_id}
         await ws.send_json(payload)
 
-        result = await asyncio.wait_for(future, timeout=_COMMAND_TIMEOUT)
+        result = await asyncio.wait_for(future, timeout=timeout_seconds)
         return result
     except asyncio.TimeoutError:
         raise HTTPException(

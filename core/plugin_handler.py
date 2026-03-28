@@ -16,10 +16,14 @@ from core.version_build_store import (
 
 class PluginHandler:
 
-    def __init__(self, plugin_json: dict, plugin_dir: str, cluster_root: str):
+    def __init__(self, plugin_json: dict, plugin_dir: str, cluster_root: str, plugin_key: str | None = None):
         self._plugin = plugin_json
         self._plugin_dir = plugin_dir
         self._cluster_root = cluster_root
+        resolved_key = str(plugin_key or "").strip()
+        if not resolved_key:
+            resolved_key = str(os.path.basename(str(plugin_dir or "")).strip() or plugin_json.get("name") or "")
+        self._plugin_key = resolved_key
         self._processes: dict = {}  # instance_id -> subprocess.Popen
 
     # ------------------------------------------------------------------
@@ -380,7 +384,7 @@ class PluginHandler:
         )
 
     def _version_build_plugin_key(self) -> str:
-        return str(os.path.basename(str(self._plugin_dir or "")).strip() or self._plugin.get("name") or "").strip()
+        return str(self._plugin_key or self._plugin.get("name") or "").strip()
 
     def _load_version_build_state(self) -> dict:
         return load_version_build_plugins_state(self._version_build_map_path())
@@ -1042,7 +1046,7 @@ class PluginHandler:
         return None
 
     def _load_defaults(self) -> dict:
-        plugin_defaults: dict = {}
+        plugin_defaults: dict = dict(self._plugin or {})
         for filename in ("plugin_defaults.json", "plugin_config.json"):
             path = os.path.join(self._plugin_dir, filename)
             if os.path.exists(path):
@@ -1362,7 +1366,7 @@ class PluginHandler:
         return folder_name
 
     def _match_managed_install_root(self, install_path: str) -> tuple[bool, str]:
-        plugin_name = os.path.basename(self._plugin_dir)
+        plugin_name = str(self._plugin_key or "").strip()
         managed_root = os.path.normcase(os.path.abspath(str(install_path or "")))
         instances_root = os.path.join(self._cluster_root, "plugins", plugin_name, "instances")
         if not os.path.isdir(instances_root):
@@ -1382,9 +1386,9 @@ class PluginHandler:
             return None
         from core.plugin_config import resolve_instance_config_path
         import json
-        plugin_name = os.path.basename(self._plugin_dir)
+        plugin_name = str(self._plugin_key or "").strip()
         candidates = []
-        if self._cluster_root:
+        if self._cluster_root and plugin_name:
             candidates.append(str(resolve_instance_config_path(str(self._cluster_root), plugin_name, instance_id)))
         # Fallback: look directly in plugin_dir
         candidates.append(os.path.join(self._plugin_dir, "instances", instance_id, "config", "instance_config.json"))
