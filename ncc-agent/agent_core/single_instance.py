@@ -9,10 +9,9 @@ ERROR_ALREADY_EXISTS = 183
 _mutex_handle = None
 
 
-def _mutex_name(*, cluster_root: str, entrypoint_name: str) -> str:
+def _mutex_name(*, cluster_root: str, entrypoint_name: str | None = None) -> str:
     normalized_root = os.path.normcase(os.path.abspath(str(cluster_root or "")))
-    normalized_entry = str(entrypoint_name or "").strip().lower()
-    digest = hashlib.sha256(f"{normalized_root}|{normalized_entry}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(normalized_root.encode("utf-8")).hexdigest()
     return f"Local\\NCCAgent_{digest}"
 
 

@@ -60,3 +60,16 @@ def test_acquire_single_instance_duplicate_process_exits(monkeypatch):
 
     assert ok is False
     assert kernel32.closed == [1]
+
+
+def test_mutex_name_is_stable_across_agent_entrypoints():
+    main_name = _MODULE._mutex_name(
+        cluster_root=r"D:\Ark",
+        entrypoint_name="main.py",
+    )
+    fix_name = _MODULE._mutex_name(
+        cluster_root=r"D:\Ark",
+        entrypoint_name="fix_main.py",
+    )
+
+    assert main_name == fix_name
