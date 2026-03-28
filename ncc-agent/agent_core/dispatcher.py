@@ -20,6 +20,7 @@ fetch_logs     → AdminAPI.get_log_tail(plugin_name, instance_id, log_name, las
                for ARK-family servers.
 """
 
+import asyncio
 import json
 import logging
 
@@ -86,7 +87,19 @@ async def dispatch_command(msg: dict, admin_api, websocket) -> None:
             )
 
     try:
-        result_data = _route(action, plugin_name, instance_id, payload, admin_api)
+        if action == "install_server":
+            # SteamCMD installs are long-running and must not block the async
+            # websocket loop, or the backend marks the agent offline.
+            result_data = await asyncio.to_thread(
+                _route,
+                action,
+                plugin_name,
+                instance_id,
+                payload,
+                admin_api,
+            )
+        else:
+            result_data = _route(action, plugin_name, instance_id, payload, admin_api)
         envelope = _build_result(command_id, "success", result_data)
     except Exception as exc:
         logger.exception(
