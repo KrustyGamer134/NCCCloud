@@ -34,9 +34,8 @@ def test_cloud_registered_plugin_handler_uses_registry_key_and_embedded_install_
 
     instance_cfg = (
         cluster_root
-        / "plugins"
-        / "ark_survival_ascended"
         / "instances"
+        / "ark_survival_ascended"
         / "10"
         / "config"
         / "instance_config.json"

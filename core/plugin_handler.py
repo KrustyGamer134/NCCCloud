@@ -1366,9 +1366,10 @@ class PluginHandler:
         return folder_name
 
     def _match_managed_install_root(self, install_path: str) -> tuple[bool, str]:
+        from core.instance_layout import get_instances_root
         plugin_name = str(self._plugin_key or "").strip()
         managed_root = os.path.normcase(os.path.abspath(str(install_path or "")))
-        instances_root = os.path.join(self._cluster_root, "plugins", plugin_name, "instances")
+        instances_root = str(get_instances_root(str(self._cluster_root), plugin_name))
         if not os.path.isdir(instances_root):
             return False, ""
 

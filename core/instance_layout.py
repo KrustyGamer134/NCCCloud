@@ -27,20 +27,49 @@ from typing import Optional
 SCHEMA_VERSION = 1
 
 
+def _resolve_cluster_config_path(cluster_root: str) -> Path | None:
+    base = Path(str(cluster_root))
+    candidates = (
+        base / "config" / "cluster_config.json",
+        base / "cluster_config.json",
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_cluster_config_fields(cluster_root: str) -> dict:
+    path = _resolve_cluster_config_path(cluster_root)
+    if path is None:
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def get_instances_root(cluster_root: str, plugin_name: str) -> Path:
+    cluster_fields = _load_cluster_config_fields(cluster_root)
+    configured = str(cluster_fields.get("install_root_dir") or "").strip()
+    if configured:
+        return Path(configured) / str(plugin_name)
+    return Path(cluster_root) / "plugins" / str(plugin_name) / "instances"
+
+
 def get_instance_root(cluster_root: str, plugin_name: str, instance_id: str) -> Path:
     """
     Deterministically compute the instance root path.
 
     Layout:
+    Preferred:
+    <install_root_dir>/<plugin_name>/<instance_id>/
+
+    Legacy fallback:
     <cluster_root>/plugins/<plugin_name>/instances/<instance_id>/
     """
-    return (
-        Path(cluster_root)
-        / "plugins"
-        / plugin_name
-        / "instances"
-        / instance_id
-    )
+    return get_instances_root(cluster_root, plugin_name) / str(instance_id)
 
 
 def read_instance_install_status(cluster_root: str, plugin_name: str, instance_id: str) -> str:

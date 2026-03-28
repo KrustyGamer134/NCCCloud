@@ -295,18 +295,21 @@ class AdminAPI:
         """List instances for a plugin by scanning the filesystem (deterministic, game-agnostic).
 
         Source of truth:
+          <install_root_dir>/<plugin_name>/<instance_id>/instance.json
+
+        Legacy fallback:
           <cluster_root>/plugins/<plugin_name>/instances/<instance_id>/instance.json
 
         Returns canonical envelope:
           {"status":"success","data":{"plugin":<name>,"instances":[...]}}
         """
-        from pathlib import Path
+        from core.instance_layout import get_instances_root
 
         cluster_root = getattr(self._orchestrator, "_cluster_root", None)
         if not cluster_root:
             return {"status": "error", "message": "Cluster root not configured"}
 
-        base = Path(cluster_root) / "plugins" / str(plugin_name) / "instances"
+        base = get_instances_root(str(cluster_root), str(plugin_name))
         if not base.exists() or not base.is_dir():
             return {"status": "success", "data": {"plugin": str(plugin_name), "instances": []}}
 
@@ -1673,7 +1676,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

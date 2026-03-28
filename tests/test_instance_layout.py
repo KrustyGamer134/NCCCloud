@@ -49,3 +49,30 @@ def test_ensure_instance_layout_idempotent(tmp_path):
     # Still correct and not overwritten
     assert metadata["install_status"] == "NOT_INSTALLED"
     assert result_second["instance_root"] == str(instance_root)
+
+
+def test_get_instance_root_uses_configured_install_root_dir(tmp_path):
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "cluster_config.json").write_text(
+        json.dumps({"install_root_dir": str(tmp_path / "arkSA" / "instances")}),
+        encoding="utf-8",
+    )
+
+    root = get_instance_root(tmp_path, "ark", "1")
+
+    assert root == tmp_path / "arkSA" / "instances" / "ark" / "1"
+
+
+def test_ensure_instance_layout_uses_configured_install_root_dir(tmp_path):
+    (tmp_path / "config").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config" / "cluster_config.json").write_text(
+        json.dumps({"install_root_dir": str(tmp_path / "arkSA" / "instances")}),
+        encoding="utf-8",
+    )
+
+    result = ensure_instance_layout(tmp_path, "ark", "1")
+    instance_root = tmp_path / "arkSA" / "instances" / "ark" / "1"
+
+    assert instance_root.exists()
+    assert (instance_root / "instance.json").exists()
+    assert result["instance_root"] == str(instance_root)

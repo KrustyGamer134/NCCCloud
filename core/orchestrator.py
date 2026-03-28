@@ -382,7 +382,8 @@ class Orchestrator:
     def _iter_instance_ids(self, plugin_name):
         if not self._cluster_root:
             return []
-        base = Path(str(self._cluster_root)) / "plugins" / str(plugin_name) / "instances"
+        from core.instance_layout import get_instances_root
+        base = get_instances_root(str(self._cluster_root), str(plugin_name))
         if not base.is_dir():
             return []
         out = []
@@ -2446,7 +2447,8 @@ class Orchestrator:
     def _configured_instance_ids(self, plugin_name):
         if not self._cluster_root:
             return []
-        instances_root = Path(str(self._cluster_root)) / "plugins" / str(plugin_name) / "instances"
+        from core.instance_layout import get_instances_root
+        instances_root = get_instances_root(str(self._cluster_root), str(plugin_name))
         if not instances_root.is_dir():
             return []
         out = []
@@ -3014,7 +3016,8 @@ class Orchestrator:
         if runtime_running or current_state not in {self._state_manager.STOPPED, self._state_manager.DISABLED}:
             return {"status": "error", "message": "Server must be stopped before it can be removed"}
 
-        instance_root = Path(str(self._cluster_root)) / "plugins" / plugin_name / "instances" / instance_id
+        from core.instance_layout import get_instance_root
+        instance_root = get_instance_root(str(self._cluster_root), plugin_name, instance_id)
         install_root_path: Path | None = None
         layout = self._resolve_instance_install_layout(plugin_name, instance_id)
         if isinstance(layout, dict):
@@ -3315,7 +3318,8 @@ class Orchestrator:
     def _used_managed_ports(self, plugin_name: str):
         from pathlib import Path
 
-        base = Path(str(self._cluster_root)) / "plugins" / str(plugin_name) / "instances"
+        from core.instance_layout import get_instances_root
+        base = get_instances_root(str(self._cluster_root), str(plugin_name))
         used: dict[str, set[int]] = {"game": set(), "rcon": set()}
         if not base.exists() or not base.is_dir():
             return used
@@ -3380,7 +3384,8 @@ class Orchestrator:
     def _next_available_instance_id(self, plugin_name: str) -> str:
         from pathlib import Path
 
-        base = Path(str(self._cluster_root)) / "plugins" / str(plugin_name) / "instances"
+        from core.instance_layout import get_instances_root
+        base = get_instances_root(str(self._cluster_root), str(plugin_name))
         used = set()
         if base.exists() and base.is_dir():
             for entry in base.iterdir():
@@ -3803,7 +3808,6 @@ class Orchestrator:
                 "ports": inst.get("ports") or [],
             },
         }
-
 
 
 
