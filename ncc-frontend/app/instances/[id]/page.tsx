@@ -31,17 +31,104 @@ function LogBlock({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-function resolveRecommendedAction(args: {
+const ACTIVE_INSTALL_STATES = new Set(["queued", "running", "installing"]);
+const ACTIVE_START_STATES = new Set(["starting", "restarting"]);
+
+function normalizeState(value: unknown, fallback = "unknown") {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized || fallback;
+}
+
+function titleCaseState(value: string) {
+  return String(value || "unknown")
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function deriveDetailView(args: {
   statusState: string;
   installStatus: string;
   progressState: string;
+  runtimeRunning: boolean;
   runtimeReady: boolean;
 }) {
-  const statusState = String(args.statusState).toLowerCase();
-  const installStatus = String(args.installStatus).toLowerCase();
-  const progressState = String(args.progressState).toLowerCase();
+  const lifecycle = normalizeState(args.statusState);
+  const install = normalizeState(args.installStatus);
+  const progress = normalizeState(args.progressState, "not_started");
+  const runtimeRunning = Boolean(args.runtimeRunning);
+  const runtimeReady = Boolean(args.runtimeReady);
 
-  if (["queued", "running", "installing", "starting"].includes(progressState)) {
+  const installActive = ACTIVE_INSTALL_STATES.has(progress) || ACTIVE_INSTALL_STATES.has(install);
+  const startActive = ACTIVE_START_STATES.has(lifecycle) || progress === "starting";
+  const stopActive = lifecycle === "stopping";
+  const failed = progress === "failed" || progress === "error" || install === "failed" || install === "error";
+  const installed = !["not_installed", "unknown"].includes(install);
+  const running = lifecycle === "running" || lifecycle === "started" || runtimeReady;
+
+  const lifecycleBadge = installActive
+    ? "Installing"
+    : startActive
+    ? lifecycle === "restarting"
+      ? "Restarting"
+      : "Starting"
+    : stopActive
+    ? "Stopping"
+    : titleCaseState(lifecycle);
+
+  const installBadge = installActive
+    ? "Installing"
+    : failed
+    ? "Failed"
+    : installed
+    ? "Installed"
+    : "Not Installed";
+
+  const progressBadge = installActive
+    ? titleCaseState(progress === "not_started" ? "running" : progress)
+    : startActive
+    ? lifecycle === "restarting"
+      ? "Restarting"
+      : "Starting"
+    : stopActive
+    ? "Stopping"
+    : failed
+    ? "Failed"
+    : "Idle";
+
+  return {
+    installActive,
+    startActive,
+    stopActive,
+    failed,
+    installed,
+    running,
+    runtimeRunning,
+    runtimeReady,
+    lifecycle,
+    install,
+    progress,
+    lifecycleBadge,
+    installBadge,
+    progressBadge,
+  };
+}
+
+function resolveRecommendedAction(args: {
+  installActive: boolean;
+  startActive: boolean;
+  stopActive: boolean;
+  failed: boolean;
+  installed: boolean;
+  running: boolean;
+  runtimeReady: boolean;
+}) {
+  if (args.installActive) {
     return {
       title: "Installation in progress",
       body: "The host is still working. Stay on this page to watch logs and progress update.",
@@ -49,7 +136,23 @@ function resolveRecommendedAction(args: {
     };
   }
 
-  if (["not_installed", "unknown", "failed", "error"].includes(installStatus)) {
+  if (args.startActive) {
+    return {
+      title: "Startup in progress",
+      body: "The host accepted the start request. Wait for runtime readiness and current logs before taking another action.",
+      action: null,
+    };
+  }
+
+  if (args.stopActive) {
+    return {
+      title: "Shutdown in progress",
+      body: "The host is reconciling the stop request. Wait for the runtime state to settle before the next action.",
+      action: null,
+    };
+  }
+
+  if (!args.installed || args.failed) {
     return {
       title: "Install the server",
       body: "Managed provisioning is complete. Run Install next to place the ARK server files on the host.",
@@ -57,7 +160,7 @@ function resolveRecommendedAction(args: {
     };
   }
 
-  if (statusState !== "running" && !args.runtimeReady) {
+  if (!args.running && !args.runtimeReady) {
     return {
       title: "Start the server",
       body: "The server files are in place. Start the instance to launch the ARK runtime and confirm readiness.",
@@ -111,8 +214,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
       const payload = await fetchInstanceDetail(token!, instanceId);
       setDetail(payload);
       setError(null);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to load instance detail");
+    } catch (error: unknown) {
+      setError(errorMessage(error, "Failed to load instance detail"));
     } finally {
       setLoading(false);
     }
@@ -125,6 +228,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const statusState = detail?.status?.data?.state ?? detail?.instance.status ?? "unknown";
   const installStatus = detail?.status?.data?.install_status ?? detail?.instance.install_status ?? "unknown";
   const progressState = detail?.install_progress?.data?.state ?? "not_started";
+  const runtimeRunning = Boolean(detail?.status?.data?.runtime_running);
+  const runtimeReady = Boolean(detail?.status?.data?.runtime_ready);
   const installLogLines = detail?.logs.install_server?.data?.lines ?? detail?.install_progress?.data?.install_log_tail ?? [];
   const steamcmdLogLines = detail?.install_progress?.data?.steamcmd_log_tail ?? [];
   const runtimeLogLines = detail?.logs.server?.data?.lines ?? [];
@@ -132,19 +237,32 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const agentOnline = Boolean(detail?.instance.agent_online);
   const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
   const configRequiresRestart = Boolean(detail?.config_apply?.data?.requires_restart);
-  const shouldAutoRefresh =
-    pendingAction !== null ||
-    ["starting", "stopping", "restarting"].includes(String(statusState).toLowerCase()) ||
-    ["queued", "running", "installing", "starting"].includes(String(installStatus).toLowerCase()) ||
-    ["queued", "running", "installing", "starting"].includes(String(progressState).toLowerCase());
-  const runtimeReady = Boolean(detail?.status?.data?.runtime_ready);
-  const recommendedAction = resolveRecommendedAction({
+  const view = deriveDetailView({
     statusState,
     installStatus,
     progressState,
+    runtimeRunning,
     runtimeReady,
   });
-  const actionsDisabled = pendingAction !== null || !agentOnline;
+  const shouldAutoRefresh =
+    pendingAction !== null ||
+    view.installActive ||
+    view.startActive ||
+    view.stopActive;
+  const recommendedAction = resolveRecommendedAction(view);
+  const actionDisabled = {
+    "install-server": !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || view.runtimeRunning,
+    start: !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || !view.installed || view.running,
+    stop: !agentOnline || pendingAction !== null || view.installActive || view.stopActive || (!view.running && !view.startActive && !view.runtimeRunning),
+    restart: !agentOnline || pendingAction !== null || view.installActive || view.startActive || view.stopActive || !view.installed || !view.running,
+  } as const;
+  const progressSummary = view.installActive
+    ? "Install progress is coming from the host installer state and SteamCMD metadata."
+    : view.startActive
+    ? "Startup progress is coming from the lifecycle snapshot and runtime readiness."
+    : view.stopActive
+    ? "Shutdown progress is coming from the lifecycle snapshot while the host reconciles runtime state."
+    : "No active install or lifecycle transition is reported by the backend.";
 
   useEffect(() => {
     if (!instanceId || !shouldAutoRefresh) return;
@@ -163,8 +281,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
       const token = await getToken();
       await runInstanceAction(token!, instanceId, action);
       await loadDetail();
-    } catch (e: any) {
-      setError(e.message ?? `Failed to ${action}`);
+    } catch (error: unknown) {
+      setError(errorMessage(error, `Failed to ${action}`));
     } finally {
       setPendingAction(null);
     }
@@ -214,28 +332,28 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             )}
             <button
               onClick={() => void handleAction("install-server")}
-              disabled={actionsDisabled}
+              disabled={actionDisabled["install-server"]}
               className="rounded border border-blue-700 bg-blue-900 px-3 py-1.5 text-sm text-blue-200 hover:border-blue-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "install-server" ? "Installing..." : "Install"}
             </button>
             <button
               onClick={() => void handleAction("start")}
-              disabled={actionsDisabled}
+              disabled={actionDisabled.start}
               className="rounded border border-green-700 bg-green-900 px-3 py-1.5 text-sm text-green-200 hover:border-green-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "start" ? "Starting..." : "Start"}
             </button>
             <button
               onClick={() => void handleAction("stop")}
-              disabled={actionsDisabled}
+              disabled={actionDisabled.stop}
               className="rounded border border-red-700 bg-red-900 px-3 py-1.5 text-sm text-red-200 hover:border-red-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "stop" ? "Stopping..." : "Stop"}
             </button>
             <button
               onClick={() => void handleAction("restart")}
-              disabled={actionsDisabled}
+              disabled={actionDisabled.restart}
               className="rounded border border-yellow-700 bg-yellow-900 px-3 py-1.5 text-sm text-yellow-200 hover:border-yellow-500 hover:text-white transition-colors disabled:opacity-50"
             >
               {pendingAction === "restart" ? "Restarting..." : "Restart"}
@@ -281,7 +399,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
                 {recommendedAction.action && (
                   <button
                     onClick={() => void handleAction(recommendedAction.action)}
-                    disabled={actionsDisabled}
+                    disabled={actionDisabled[recommendedAction.action]}
                     className="shrink-0 rounded border border-blue-600 bg-blue-800 px-3 py-1.5 text-sm text-white hover:border-blue-500 hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     {pendingAction === recommendedAction.action
@@ -295,15 +413,15 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             <section className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">Lifecycle</div>
-                <StatusBadge label={statusState} />
+                <StatusBadge label={view.lifecycleBadge} />
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">Install</div>
-                <StatusBadge label={installStatus} />
+                <StatusBadge label={view.installBadge} />
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">Progress</div>
-                <StatusBadge label={progressState} />
+                <StatusBadge label={view.progressBadge} />
               </div>
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">Agent</div>
@@ -340,6 +458,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
 
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-3 text-sm font-medium text-white">Install Metadata</div>
+                <p className="mb-3 text-xs text-gray-500">{progressSummary}</p>
                 <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-gray-300">
                   {JSON.stringify(detail.install_progress?.data?.progress_metadata ?? {}, null, 2)}
                 </pre>
