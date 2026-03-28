@@ -60,6 +60,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
 # ── Test DB URL ────────────────────────────────────────────────────────────────
 _DEFAULT_TEST_DB_URL_SYNC = (
