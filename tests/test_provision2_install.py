@@ -171,12 +171,19 @@ def test_start_succeeds_after_install(tmp_path: Path):
 def test_install_server_success_sets_installed_and_start_gate_passes(tmp_path: Path):
     cluster_root = tmp_path
     ensure_instance_layout(str(cluster_root), "ark", "10")
+    install_root = cluster_root / "GameServers" / "ArkSA" / "TheIsland_WP_1"
 
     conn = FakeConn(
         responses={
             "install_server": {
                 "status": "success",
-                "data": {"ok": True, "details": "install_server complete", "warnings": [], "errors": []},
+                "data": {
+                    "ok": True,
+                    "details": "install_server complete",
+                    "warnings": [],
+                    "errors": [],
+                    "install_root": str(install_root),
+                },
             }
         }
     )
@@ -192,6 +199,9 @@ def test_install_server_success_sets_installed_and_start_gate_passes(tmp_path: P
     assert install["status"] == "success"
     assert install["data"]["install_status"] == "INSTALLED"
     assert read_instance_install_status(str(cluster_root), "ark", "10") == "INSTALLED"
+    config_path = cluster_root / "plugins" / "ark" / "instances" / "10" / "config" / "instance_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert config["install_root"] == str(install_root)
 
     started = orch.start_instance("ark", "10")
     assert started["status"] == "success"
@@ -430,6 +440,9 @@ def test_install_server_instance_prefers_prepared_master_distribution(tmp_path: 
     assert result["data"]["distribution_method"] == "robocopy"
     assert conn.requests == []
     assert read_instance_install_status(str(cluster_root), "ark", "10") == "INSTALLED"
+    config_path = cluster_root / "plugins" / "ark" / "instances" / "10" / "config" / "instance_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert config["install_root"] == str(dest_root)
     assert (dest_root / "ShooterGame" / "Binaries" / "Win64" / "ArkAscendedServer.exe").read_text(encoding="utf-8") == "master-binary"
     assert (dest_root / "ShooterGame" / "Content" / "base.pak").read_text(encoding="utf-8") == "pak"
     assert preserved_ini.read_text(encoding="utf-8") == "instance"

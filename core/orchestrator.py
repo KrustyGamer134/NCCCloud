@@ -2237,6 +2237,10 @@ class Orchestrator:
 
         distributed = self._distribute_master_install_to_instance(plugin_name, instance_id)
         if isinstance(distributed, dict) and distributed.get("status") == "success":
+            distributed_data = distributed.get("data") if isinstance(distributed.get("data"), dict) else {}
+            install_root = str((distributed_data or {}).get("install_root") or "").strip()
+            if install_root:
+                self._merge_instance_config_fields(plugin_name, instance_id, {"install_root": install_root})
             write_instance_install_status(cluster_root, plugin_name, instance_id, "INSTALLED")
             self._mark_instance_readiness_dirty(plugin_name, instance_id)
             self._state_manager.set_state(plugin_name, instance_id, self._state_manager.STOPPED)
@@ -2276,6 +2280,10 @@ class Orchestrator:
             install_reason = "install_server response data.ok must be true"
         else:
             install_status = "INSTALLED"
+            install_data = response.get("data") if isinstance(response.get("data"), dict) else {}
+            install_root = str((install_data or {}).get("install_root") or "").strip()
+            if install_root:
+                self._merge_instance_config_fields(plugin_name, instance_id, {"install_root": install_root})
 
         write_instance_install_status(cluster_root, plugin_name, instance_id, install_status)
         self._mark_instance_readiness_dirty(plugin_name, instance_id)
@@ -3795,7 +3803,6 @@ class Orchestrator:
                 "ports": inst.get("ports") or [],
             },
         }
-
 
 
 
