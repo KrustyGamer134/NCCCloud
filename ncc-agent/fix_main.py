@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import sys
 
 
@@ -24,6 +25,15 @@ async def main():
     if not settings.cluster_root:
         logger.error("CLUSTER_ROOT is not set.")
         sys.exit(1)
+
+    from agent_core.single_instance import acquire_single_instance
+
+    if not acquire_single_instance(
+        cluster_root=settings.cluster_root,
+        entrypoint_name=os.path.basename(__file__),
+    ):
+        logger.warning("Agent already running for cluster_root=%s; exiting duplicate process", settings.cluster_root)
+        return
 
     _ensure_core_import_path(settings, logger)
 
