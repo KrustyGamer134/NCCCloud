@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.routes.agents import is_agent_connected
 from core.agent_relay import send_command
 from core.tenant import require_tenant
-from db.models import Instance, PluginCatalog, TenantSettings
+from db.models import Agent, Instance, PluginCatalog, TenantSettings
 from db.session import get_db
 
 router = APIRouter(tags=["settings"])
+_AGENT_CLUSTER_CONFIG_FIELDS = {"gameservers_root", "steamcmd_root", "cluster_name"}
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +90,29 @@ async def put_app_settings(
         db.add(row)
 
     await db.flush()
+
+    cluster_fields = {
+        key: body.settings_json.get(key)
+        for key in _AGENT_CLUSTER_CONFIG_FIELDS
+        if key in body.settings_json
+    }
+    if cluster_fields:
+        agents_result = await db.execute(
+            select(Agent).where(
+                Agent.tenant_id == uuid.UUID(tenant_id),
+                Agent.is_revoked.is_(False),
+            )
+        )
+        for agent in agents_result.scalars().all():
+            agent_id_str = str(agent.agent_id)
+            if not is_agent_connected(agent_id_str):
+                continue
+            await send_command(
+                agent_id=agent_id_str,
+                command="set-cluster-config-fields",
+                payload={"fields": cluster_fields},
+            )
+
     return AppSettingsResponse(settings_json=row.settings_json)
 
 

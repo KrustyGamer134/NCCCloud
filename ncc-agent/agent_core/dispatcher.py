@@ -174,6 +174,9 @@ def _route(action: str, plugin_name: str, instance_id: str, payload: dict, admin
             payload.get("fields") or {},
         )
 
+    if action == "set_cluster_config_fields":
+        return admin_api.set_cluster_config_fields(payload.get("fields") or {})
+
     if action == "install_deps":
         return admin_api.install_deps(plugin_name, instance_id)
 
