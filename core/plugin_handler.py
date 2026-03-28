@@ -1391,6 +1391,26 @@ class PluginHandler:
         candidates = []
         if self._cluster_root and plugin_name:
             candidates.append(str(resolve_instance_config_path(str(self._cluster_root), plugin_name, instance_id)))
+            candidates.append(
+                os.path.join(
+                    str(self._cluster_root),
+                    "instances",
+                    plugin_name,
+                    instance_id,
+                    "config",
+                    "instance_config.json",
+                )
+            )
+            candidates.append(
+                os.path.join(
+                    str(self._cluster_root),
+                    "instances",
+                    plugin_name,
+                    instance_id,
+                    "config",
+                    "plugin_instance_config.json",
+                )
+            )
         # Fallback: look directly in plugin_dir
         candidates.append(os.path.join(self._plugin_dir, "instances", instance_id, "config", "instance_config.json"))
         candidates.append(os.path.join(self._plugin_dir, "instances", instance_id, "config", "plugin_instance_config.json"))

@@ -20,9 +20,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import json
 import os
 import tempfile
-from core.instance_layout import get_instance_root
-
-
 class PluginConfigError(Exception):
     pass
 SCHEMA_VERSION = 1
@@ -59,11 +56,11 @@ def legacy_plugin_defaults_path(cluster_root: str, plugin_name: str) -> Path:
 
 
 def instance_config_path(cluster_root: str, plugin_name: str, instance_id: str) -> Path:
-    return get_instance_root(cluster_root, plugin_name, instance_id) / "config" / "instance_config.json"
+    return Path(cluster_root) / "plugins" / str(plugin_name) / "instances" / str(instance_id) / "config" / "instance_config.json"
 
 
 def legacy_instance_config_path(cluster_root: str, plugin_name: str, instance_id: str) -> Path:
-    return get_instance_root(cluster_root, plugin_name, instance_id) / "config" / "plugin_instance_config.json"
+    return Path(cluster_root) / "plugins" / str(plugin_name) / "instances" / str(instance_id) / "config" / "plugin_instance_config.json"
 
 
 def resolve_plugin_defaults_path(cluster_root: str, plugin_name: str) -> Path:
@@ -430,7 +427,6 @@ def _stable_dedupe(items: List[str]) -> List[str]:
         seen.add(x)
         out.append(x)
     return out
-
 
 
 
