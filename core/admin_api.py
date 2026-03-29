@@ -1244,6 +1244,22 @@ class AdminAPI:
             tail = lines[-n:] if len(lines) > n else lines
             return True, tail
 
+        def _tail_from_offset(path: Path, start_offset):
+            if not path.exists() or not path.is_file():
+                return False, []
+            try:
+                offset = max(0, int(start_offset))
+            except Exception:
+                offset = 0
+            try:
+                with path.open("rb") as handle:
+                    handle.seek(offset)
+                    lines = [line for line in handle.read().decode("utf-8", errors="replace").splitlines() if line.strip()]
+            except Exception:
+                return False, []
+            tail = lines[-n:] if len(lines) > n else lines
+            return True, tail
+
         metadata = None
         if progress_metadata_path.exists() and progress_metadata_path.is_file():
             try:
@@ -1254,7 +1270,21 @@ class AdminAPI:
                 metadata = None
 
         install_found, install_tail = _tail(install_log_path)
-        steamcmd_found, steamcmd_tail = _tail(steamcmd_log_path)
+        steamcmd_found = False
+        steamcmd_tail = []
+        steamcmd_source_path = steamcmd_log_path
+        if isinstance(metadata, dict):
+            source_path_text = str(metadata.get("log_path") or "").strip()
+            if source_path_text:
+                source_path = Path(source_path_text)
+                tail_found, tail_lines = _tail_from_offset(source_path, metadata.get("start_offset"))
+                if tail_found:
+                    steamcmd_found = True
+                    steamcmd_tail = tail_lines
+                    steamcmd_source_path = source_path
+        if not steamcmd_found:
+            steamcmd_found, steamcmd_tail = _tail(steamcmd_log_path)
+            steamcmd_source_path = steamcmd_log_path
 
         def _parse_steamcmd_progress(lines):
             phase = None
@@ -1317,6 +1347,7 @@ class AdminAPI:
                     "logs_dir": str(logs_path),
                     "install_log": str(install_log_path),
                     "steamcmd_log": str(steamcmd_log_path),
+                    "steamcmd_progress_source_log": str(steamcmd_source_path),
                     "progress_metadata": str(progress_metadata_path),
                 },
                 "progress_metadata": metadata,
@@ -1721,8 +1752,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
-
 
 
 

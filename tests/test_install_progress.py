@@ -60,3 +60,66 @@ def test_get_install_progress_parses_download_and_validate_percent(tmp_path):
     assert response["data"]["steamcmd_progress"]["phase"] == "validating"
     assert response["data"]["steamcmd_progress"]["percent"] == 14.69
     assert response["data"]["steamcmd_progress"]["completed"] is True
+
+
+def test_get_install_progress_prefers_metadata_source_log_from_offset(tmp_path):
+    plugin_name = "ark"
+    instance_id = "11"
+    install_root = tmp_path / "GameServers" / "ArkSA" / "TheIsland_WP"
+    logs_dir = install_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    plugin_defaults = tmp_path / "plugins" / plugin_name
+    plugin_defaults.mkdir(parents=True, exist_ok=True)
+    (plugin_defaults / "plugin_defaults.json").write_text(
+        json.dumps({"schema_version": 1, "mods": [], "passive_mods": []}),
+        encoding="utf-8",
+    )
+
+    instance_config_dir = tmp_path / "plugins" / plugin_name / "instances" / instance_id / "config"
+    instance_config_dir.mkdir(parents=True, exist_ok=True)
+    (instance_config_dir / "instance_config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "map": "TheIsland_WP",
+                "install_root": str(install_root),
+                "mods": [],
+                "passive_mods": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    native_log_path = tmp_path / "steamcmd_console.log"
+    prefix = "old prefix line\nanother old line\n"
+    progress_lines = (
+        "Update state (0x61) downloading, progress: 62.35 (1 / 2)\n"
+        "Update state (0x81) verifying update, progress: 7.21 (1 / 2)\n"
+    )
+    native_log_path.write_text(prefix + progress_lines, encoding="utf-8")
+
+    (logs_dir / "steamcmd_install.log").write_text("", encoding="utf-8")
+    (logs_dir / "steamcmd_progress_source.json").write_text(
+        json.dumps(
+            {
+                "source": "steamcmd_native_console_log",
+                "log_path": str(native_log_path),
+                "start_offset": len(prefix.encode("utf-8")),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    api = AdminAPI(_StubOrchestrator(tmp_path))
+    response = api.get_install_progress(plugin_name, instance_id, last_lines=50)
+
+    assert response["status"] == "success"
+    assert response["data"]["state"] == "validating"
+    assert response["data"]["steamcmd_progress"]["phase"] == "validating"
+    assert response["data"]["steamcmd_progress"]["percent"] == 7.21
+    assert response["data"]["steamcmd_log_tail"] == [
+        "Update state (0x61) downloading, progress: 62.35 (1 / 2)",
+        "Update state (0x81) verifying update, progress: 7.21 (1 / 2)",
+    ]
+    assert response["data"]["paths"]["steamcmd_progress_source_log"] == str(native_log_path)
