@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import uuid
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,6 +16,118 @@ from db.session import get_db
 
 router = APIRouter(tags=["settings"])
 _AGENT_CLUSTER_CONFIG_FIELDS = {"gameservers_root", "steamcmd_root", "cluster_name"}
+_INHERITED_INSTANCE_FIELDS = {
+    "display_name",
+    "cluster_id",
+    "mods",
+    "passive_mods",
+    "admin_password",
+    "rcon_enabled",
+    "pve",
+    "auto_update_on_restart",
+    "max_players",
+}
+
+
+def _plugin_value(plugin_json: dict, key: str, *, server_setting: bool = False):
+    if key in plugin_json and plugin_json.get(key) is not None:
+        return plugin_json.get(key)
+    section_name = "server_settings" if server_setting else "app_settings"
+    section = plugin_json.get(section_name)
+    if isinstance(section, dict):
+        entry = section.get(key)
+        if isinstance(entry, dict):
+            return entry.get("value")
+    return None
+
+
+def _friendly_map_name(plugin_json: dict, map_name: object) -> str:
+    raw = str(map_name or "").strip()
+    if not raw:
+        return ""
+    maps = plugin_json.get("maps")
+    if isinstance(maps, dict):
+        lowered = raw.lower()
+        for known_key, entry in maps.items():
+            if str(known_key or "").strip().lower() != lowered:
+                continue
+            if isinstance(entry, dict):
+                display_name = str(entry.get("display_name") or "").strip()
+                if display_name:
+                    return display_name
+    text = raw[:-3] if raw.lower().endswith("_wp") else raw
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text.replace("_", " ").strip())
+    return " ".join(part[:1].upper() + part[1:] for part in text.split(" ") if part)
+
+
+def _derived_server_name(plugin_json: dict, config_json: dict) -> str:
+    cluster_name = str(_plugin_value(plugin_json, "display_name") or "").strip()
+    friendly_map = _friendly_map_name(
+        plugin_json,
+        config_json.get("map")
+        or _plugin_value(plugin_json, "map", server_setting=True),
+    )
+    if cluster_name and friendly_map:
+        return f"{cluster_name} {friendly_map}".strip()
+    if friendly_map:
+        return friendly_map
+    return str(cluster_name or plugin_json.get("display_name") or "").strip()
+
+
+def _effective_instance_config(config_json: dict, plugin_json: dict) -> dict:
+    effective = dict(config_json or {})
+    for field in _INHERITED_INSTANCE_FIELDS:
+        if field in {"mods", "passive_mods"}:
+            if field not in effective:
+                value = _plugin_value(plugin_json, field)
+                if value is not None:
+                    effective[field] = list(value) if isinstance(value, list) else value
+            continue
+        if field not in effective:
+            value = _plugin_value(plugin_json, field)
+            if value is not None:
+                effective[field] = value
+
+    if "map" not in effective:
+        value = _plugin_value(plugin_json, "map", server_setting=True)
+        if value is not None:
+            effective["map"] = value
+    if "game_port" not in effective:
+        value = (
+            plugin_json.get("default_game_port_start")
+            if plugin_json.get("default_game_port_start") is not None
+            else _plugin_value(plugin_json, "game_port", server_setting=True)
+        )
+        if value is not None:
+            effective["game_port"] = value
+    if "rcon_port" not in effective:
+        value = (
+            plugin_json.get("default_rcon_port_start")
+            if plugin_json.get("default_rcon_port_start") is not None
+            else _plugin_value(plugin_json, "rcon_port", server_setting=True)
+        )
+        if value is not None:
+            effective["rcon_port"] = value
+    server_name = _derived_server_name(plugin_json, effective)
+    if server_name:
+        effective["server_name"] = server_name
+    return effective
+
+
+def _materialize_instance_config(previous_config: dict, submitted_config: dict, plugin_json: dict) -> dict:
+    materialized = _effective_instance_config(previous_config, plugin_json)
+    for key, value in dict(submitted_config or {}).items():
+        materialized[str(key)] = value
+    explicit_server_name = str(materialized.get("server_name") or "").strip()
+    if explicit_server_name:
+        materialized["server_name"] = explicit_server_name
+    else:
+        server_name = _derived_server_name(plugin_json, materialized)
+        if server_name:
+            materialized["server_name"] = server_name
+        else:
+            materialized.pop("server_name", None)
+    return materialized
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +267,12 @@ async def put_plugin_settings(
             status_code=404,
             detail={"error": "Plugin not found", "code": "NOT_FOUND"},
         )
+    cluster_id = body.plugin_json.get("cluster_id")
+    if cluster_id is not None and str(cluster_id).strip() and not str(cluster_id).strip().isdigit():
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "Cluster ID must contain digits only", "code": "VALIDATION_ERROR"},
+        )
     existing_json = dict(plugin.plugin_json or {})
     next_json = dict(body.plugin_json or {})
     existing_json.update(next_json)
@@ -185,9 +304,17 @@ async def get_instance_config(
             status_code=404,
             detail={"error": "Instance not found", "code": "NOT_FOUND"},
         )
+    plugin_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    plugin = plugin_result.scalar_one_or_none()
+    effective_config = _effective_instance_config(
+        dict(inst.config_json or {}),
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+    )
     return InstanceConfigResponse(
         instance_id=str(inst.instance_id),
-        config_json=inst.config_json or {},
+        config_json=effective_config,
     )
 
 
@@ -211,7 +338,12 @@ async def put_instance_config(
             detail={"error": "Instance not found", "code": "NOT_FOUND"},
         )
     previous_config = dict(inst.config_json or {})
-    next_config = dict(body.config_json or {})
+    plugin_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    plugin = plugin_result.scalar_one_or_none()
+    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
+    next_config = _materialize_instance_config(previous_config, dict(body.config_json or {}), plugin_json)
     inst.config_json = next_config
     db.add(inst)
     await db.flush()
@@ -253,11 +385,6 @@ async def put_instance_config(
                     },
                 }
             else:
-                plugin_result = await db.execute(
-                    select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
-                )
-                plugin = plugin_result.scalar_one_or_none()
-                plugin_json = plugin.plugin_json if plugin else {}
                 agent_result = await send_command(
                     agent_id=agent_id_str,
                     command="set-instance-plugin-config-fields",

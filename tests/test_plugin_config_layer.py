@@ -99,6 +99,20 @@ def test_load_plugin_defaults_reads_legacy_plugin_config_name(tmp_path):
     assert defaults["mods"] == ["100"]
     assert defaults["passive_mods"] == ["200"]
 
+
+def test_write_plugin_defaults_rejects_non_numeric_cluster_id(tmp_path):
+    with pytest.raises(PluginConfigError, match="cluster_id must contain digits only"):
+        write_plugin_defaults_atomic(
+            str(tmp_path),
+            "ark",
+            {
+                "schema_version": 1,
+                "mods": [],
+                "passive_mods": [],
+                "cluster_id": "657u6565",
+            },
+        )
+
 def test_defaults_file_created_if_missing(tmp_path):
     cluster_root = str(tmp_path)
     (tmp_path / "plugins" / "ark").mkdir(parents=True, exist_ok=True)
@@ -386,6 +400,5 @@ def test_adminapi_build_default_treats_invalid_first_run_plugin_metadata_as_no_p
         assert api.get_all_plugins() == []
     finally:
         api.close()
-
 
 

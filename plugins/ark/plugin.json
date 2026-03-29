@@ -78,7 +78,7 @@
   "app_settings": {
     "display_name": {
       "use":   "ini_setting",
-      "label": "Display Name Prefix",
+      "label": "Cluster Name",
       "type":  "string",
       "value": ""
     },

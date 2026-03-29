@@ -189,6 +189,8 @@ def _normalize_plugin_defaults(raw: Dict[str, Any], *, path: Optional[Path] = No
             continue
         if not isinstance(value, str):
             raise PluginConfigError(f"plugin defaults {key} must be string")
+        if key == "cluster_id" and value and not value.isdigit():
+            raise PluginConfigError("plugin defaults cluster_id must contain digits only")
         if key in {"scheduled_restart_time", "scheduled_update_check_time"}:
             if value and not _is_valid_schedule_time(value):
                 raise PluginConfigError(f"plugin defaults {key} must use HH:MM 24-hour format")
@@ -427,6 +429,5 @@ def _stable_dedupe(items: List[str]) -> List[str]:
         seen.add(x)
         out.append(x)
     return out
-
 
 

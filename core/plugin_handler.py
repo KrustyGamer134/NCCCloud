@@ -1651,7 +1651,7 @@ class PluginHandler:
         prefix = str(defaults.get("display_name") or "").strip()
         friendly_map = self._friendly_map_name(inst.get("map") or defaults.get("map") or "")
         if prefix and friendly_map:
-            return f"{prefix}{friendly_map}"
+            return f"{prefix} {friendly_map}".strip()
         if friendly_map:
             return friendly_map
         return str(self._plugin.get("display_name") or "Server")

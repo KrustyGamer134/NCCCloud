@@ -12,7 +12,9 @@ os.environ.setdefault("CLERK_JWKS_URL", "https://example.test/.well-known/jwks.j
 os.environ.setdefault("SECRET_KEY", "test-secret")
 os.environ.setdefault("NCC_CORE_PATH", "E:\\NCCCloud")
 
-from api.routes.settings import InstanceConfigBody, put_instance_config
+from fastapi import HTTPException
+
+from api.routes.settings import InstanceConfigBody, PluginSettingsBody, put_instance_config, put_plugin_settings
 
 
 def _scalar_result(value):
@@ -137,3 +139,79 @@ async def test_put_instance_config_returns_pending_when_agent_is_offline():
     assert response.apply_result["status"] == "pending"
     assert response.apply_result["data"]["reason"] == "agent_offline"
     assert response.apply_result["data"]["deferred"] is True
+
+
+@pytest.mark.asyncio
+async def test_put_instance_config_materializes_inherited_defaults_and_derived_server_name():
+    tenant_id = uuid.uuid4()
+    instance_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+
+    inst = types.SimpleNamespace(
+        instance_id=instance_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        plugin_id="ark",
+        config_json={"map": "TheIsland_WP"},
+    )
+    plugin_catalog = types.SimpleNamespace(
+        plugin_json={
+            "display_name": "Brian Cluster",
+            "admin_password": "topsecret",
+            "rcon_enabled": True,
+            "max_players": 19,
+            "mods": ["927090"],
+            "passive_mods": ["123456"],
+            "default_game_port_start": 7777,
+            "default_rcon_port_start": 27020,
+            "maps": {"TheIsland_WP": {"display_name": "The Island"}},
+        }
+    )
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(inst),
+            _scalar_result(plugin_catalog),
+        ]
+    )
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    body = InstanceConfigBody(config_json={"map": "TheIsland_WP"})
+
+    with patch("api.routes.settings.is_agent_connected", return_value=False), patch(
+        "api.routes.settings.send_command",
+        new=AsyncMock(),
+    ):
+        response = await put_instance_config(
+            instance_id=str(instance_id),
+            body=body,
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.config_json["game_port"] == 7777
+    assert response.config_json["rcon_port"] == 27020
+    assert response.config_json["admin_password"] == "topsecret"
+    assert response.config_json["mods"] == ["927090"]
+    assert response.config_json["passive_mods"] == ["123456"]
+    assert response.config_json["server_name"] == "Brian Cluster The Island"
+
+
+@pytest.mark.asyncio
+async def test_put_plugin_settings_rejects_non_numeric_cluster_id():
+    plugin = types.SimpleNamespace(plugin_id="ark", plugin_json={"name": "ark"})
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_scalar_result(plugin))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await put_plugin_settings(
+            plugin_name="ark",
+            body=PluginSettingsBody(plugin_json={"cluster_id": "657u6565"}),
+            tenant_id=str(uuid.uuid4()),
+            db=db,
+        )
+
+    assert exc_info.value.status_code == 422

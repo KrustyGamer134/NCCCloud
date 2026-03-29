@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,6 +21,79 @@ from db.models import Agent, Instance, PluginCatalog, Tenant, TenantSettings
 from db.session import get_db
 
 router = APIRouter(tags=["instances"])
+
+
+def _plugin_value(plugin_json: dict, key: str, *, server_setting: bool = False):
+    if key in plugin_json and plugin_json.get(key) is not None:
+        return plugin_json.get(key)
+    section_name = "server_settings" if server_setting else "app_settings"
+    section = plugin_json.get(section_name)
+    if isinstance(section, dict):
+        entry = section.get(key)
+        if isinstance(entry, dict):
+            return entry.get("value")
+    return None
+
+
+def _friendly_map_name(plugin_json: dict, map_name: object) -> str:
+    raw = str(map_name or "").strip()
+    if not raw:
+        return ""
+    maps = plugin_json.get("maps")
+    if isinstance(maps, dict):
+        lowered = raw.lower()
+        for known_key, entry in maps.items():
+            if str(known_key or "").strip().lower() != lowered:
+                continue
+            if isinstance(entry, dict):
+                display_name = str(entry.get("display_name") or "").strip()
+                if display_name:
+                    return display_name
+    text = raw[:-3] if raw.lower().endswith("_wp") else raw
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text.replace("_", " ").strip())
+    return " ".join(part[:1].upper() + part[1:] for part in text.split(" ") if part)
+
+
+def _derived_server_name(plugin_json: dict, config_json: dict) -> str:
+    cluster_name = str(_plugin_value(plugin_json, "display_name") or "").strip()
+    friendly_map = _friendly_map_name(
+        plugin_json,
+        config_json.get("map") or _plugin_value(plugin_json, "map", server_setting=True),
+    )
+    if cluster_name and friendly_map:
+        return f"{cluster_name} {friendly_map}".strip()
+    if friendly_map:
+        return friendly_map
+    return str(cluster_name or plugin_json.get("display_name") or "").strip()
+
+
+def _effective_instance_config(config_json: dict, plugin_json: dict) -> dict:
+    effective = dict(config_json or {})
+    for field in ("display_name", "cluster_id", "mods", "passive_mods", "admin_password", "rcon_enabled", "pve", "auto_update_on_restart", "max_players"):
+        if field not in effective:
+            value = _plugin_value(plugin_json, field)
+            if value is not None:
+                effective[field] = list(value) if field in {"mods", "passive_mods"} and isinstance(value, list) else value
+    if "map" not in effective:
+        value = _plugin_value(plugin_json, "map", server_setting=True)
+        if value is not None:
+            effective["map"] = value
+    if "game_port" not in effective:
+        value = plugin_json.get("default_game_port_start")
+        if value is None:
+            value = _plugin_value(plugin_json, "game_port", server_setting=True)
+        if value is not None:
+            effective["game_port"] = value
+    if "rcon_port" not in effective:
+        value = plugin_json.get("default_rcon_port_start")
+        if value is None:
+            value = _plugin_value(plugin_json, "rcon_port", server_setting=True)
+        if value is not None:
+            effective["rcon_port"] = value
+    server_name = _derived_server_name(plugin_json, effective)
+    if server_name:
+        effective["server_name"] = server_name
+    return effective
 
 
 class CreateInstanceBody(BaseModel):
@@ -124,7 +198,7 @@ async def _provision_instance_on_agent(
     )
     _raise_agent_command_error(created)
 
-    config_json = dict(inst.config_json or {})
+    config_json = _effective_instance_config(dict(inst.config_json or {}), dict(plugin_json or {}))
     map_name = str(config_json.get("map") or config_json.get("map_name") or "").strip()
     if not map_name:
         return config_json
@@ -187,6 +261,9 @@ async def _provision_instance_on_agent(
     config_json["map"] = map_name
     config_json["game_port"] = game_port
     config_json["rcon_port"] = rcon_port
+    server_name = _derived_server_name(dict(plugin_json or {}), config_json)
+    if server_name:
+        config_json["server_name"] = server_name
     inst.config_json = config_json
     db.add(inst)
 
@@ -378,7 +455,21 @@ async def list_instances(
         select(Instance).where(Instance.tenant_id == uuid.UUID(tenant_id))
     )
     instances = result.scalars().all()
-    return [InstanceResponse.from_orm_safe(i) for i in instances]
+    plugin_ids = sorted({str(instance.plugin_id) for instance in instances})
+    plugin_rows: dict[str, dict] = {}
+    if plugin_ids:
+        plugin_result = await db.execute(
+            select(PluginCatalog).where(PluginCatalog.plugin_id.in_(plugin_ids))
+        )
+        plugin_rows = {row.plugin_id: dict(row.plugin_json or {}) for row in plugin_result.scalars().all()}
+    responses: list[InstanceResponse] = []
+    for instance in instances:
+        instance.config_json = _effective_instance_config(
+            dict(instance.config_json or {}),
+            plugin_rows.get(instance.plugin_id, {}),
+        )
+        responses.append(InstanceResponse.from_orm_safe(instance))
+    return responses
 
 
 @router.get("/{instance_id}", response_model=InstanceResponse)
@@ -388,6 +479,14 @@ async def get_instance(
     db: AsyncSession = Depends(get_db),
 ) -> InstanceResponse:
     inst = await _get_instance(instance_id, tenant_id, db)
+    plugin_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    plugin = plugin_result.scalar_one_or_none()
+    inst.config_json = _effective_instance_config(
+        dict(inst.config_json or {}),
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+    )
     return InstanceResponse.from_orm_safe(inst)
 
 
@@ -399,6 +498,14 @@ async def get_instance_detail(
     db: AsyncSession = Depends(get_db),
 ) -> InstanceDetailResponse:
     inst = await _get_instance(instance_id, tenant_id, db)
+    plugin_result = await db.execute(
+        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+    )
+    plugin = plugin_result.scalar_one_or_none()
+    inst.config_json = _effective_instance_config(
+        dict(inst.config_json or {}),
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+    )
     pending_ini_sync_fields = [
         str(item).strip()
         for item in list((inst.config_json or {}).get("_pending_ini_sync_fields") or [])

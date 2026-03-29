@@ -62,7 +62,6 @@ interface PluginForm {
   pve: boolean;
   auto_update_on_restart: boolean;
   max_players: string;
-  test_mode: boolean;
   install_root: string;
   scheduled_update_check_enabled: boolean;
   scheduled_update_check_time: string;
@@ -137,7 +136,6 @@ const DEFAULT_PLUGIN: PluginForm = {
   pve: true,
   auto_update_on_restart: false,
   max_players: "",
-  test_mode: false,
   install_root: "",
   scheduled_update_check_enabled: false,
   scheduled_update_check_time: "",
@@ -161,7 +159,6 @@ function pluginJsonToForm(json: Record<string, unknown>): PluginForm {
     pve: json.pve !== false,
     auto_update_on_restart: Boolean(json.auto_update_on_restart),
     max_players: json.max_players != null ? String(json.max_players) : "",
-    test_mode: Boolean(json.test_mode),
     install_root: String(json.install_root ?? ""),
     scheduled_update_check_enabled: Boolean(json.scheduled_update_check_enabled),
     scheduled_update_check_time: String(json.scheduled_update_check_time ?? ""),
@@ -187,7 +184,6 @@ function formToPluginJson(form: PluginForm): Record<string, unknown> {
     rcon_enabled: form.rcon_enabled,
     pve: form.pve,
     auto_update_on_restart: form.auto_update_on_restart,
-    test_mode: form.test_mode,
     scheduled_update_check_enabled: form.scheduled_update_check_enabled,
     scheduled_update_auto_apply: form.scheduled_update_auto_apply,
     scheduled_restart_enabled: form.scheduled_restart_enabled,
@@ -241,7 +237,6 @@ function formToInstanceConfig(form: InstanceForm): Record<string, unknown> {
   if (form.rcon_port.trim()) out.rcon_port = parseInt(form.rcon_port, 10);
   if (form.admin_password.trim()) out.admin_password = form.admin_password.trim();
   if (form.max_players.trim()) out.max_players = parseInt(form.max_players, 10);
-  if (form.server_name.trim()) out.server_name = form.server_name.trim();
   if (form.map_mod.trim()) out.map_mod = form.map_mod.trim();
   return out;
 }
@@ -275,6 +270,9 @@ function validatePluginForm(f: PluginForm): string | null {
   if (new Set(mods).size !== mods.length) return "Mods list contains duplicates.";
   if (new Set(passive).size !== passive.length) return "Passive mods list contains duplicates.";
   if (mods.some((m) => passive.includes(m))) return "Mods and passive mods must stay separate.";
+  if (f.cluster_id.trim() && !/^\d+$/.test(f.cluster_id.trim())) {
+    return "Cluster ID must contain digits only.";
+  }
   if (!isValidHHMM(f.scheduled_update_check_time))
     return "Update Check Time must use HH:MM 24-hour format.";
   if (!isValidHHMM(f.scheduled_restart_time))
@@ -720,21 +718,21 @@ function PluginDefaultsTab({
             ) : (
               <>
                 <FieldGroup title="General">
-                  <FieldRow label="Display name">
+                  <FieldRow label="Cluster name" hint="First half of the derived server name for each map">
                     <TextInput
                       value={form.display_name}
                       onChange={(v) => set("display_name", v)}
-                      placeholder="ARK: Survival Ascended"
+                      placeholder="Brian Cluster"
                     />
                   </FieldRow>
                   <FieldRow
                     label="Cluster ID"
-                    hint="Shared cluster token for cross-server travel"
+                    hint="Shared cluster token for cross-server travel; digits only"
                   >
                     <TextInput
                       value={form.cluster_id}
                       onChange={(v) => set("cluster_id", v)}
-                      placeholder="my-cluster"
+                      placeholder="6576565"
                     />
                   </FieldRow>
                 </FieldGroup>
@@ -793,12 +791,6 @@ function PluginDefaultsTab({
                 </FieldGroup>
 
                 <FieldGroup title="Advanced">
-                  <FieldRow label="Test mode">
-                    <Toggle
-                      checked={form.test_mode}
-                      onChange={(v) => set("test_mode", v)}
-                    />
-                  </FieldRow>
                   <FieldRow
                     label="Install root"
                     hint="Override the default installation directory"
@@ -1045,11 +1037,10 @@ function InstanceConfigTab({
                   <FieldRow label="Map" hint="Read-only — set when the server was created">
                     <TextInput value={form.map} disabled />
                   </FieldRow>
-                  <FieldRow label="Server name" hint="Shown in the in-game server browser">
+                  <FieldRow label="Server name" hint="Read-only — derived from cluster name and the selected map">
                     <TextInput
                       value={form.server_name}
-                      onChange={(v) => set("server_name", v)}
-                      placeholder="My ARK Server"
+                      disabled
                     />
                   </FieldRow>
                 </FieldGroup>
@@ -1096,7 +1087,7 @@ function InstanceConfigTab({
                 </FieldGroup>
 
                 <FieldGroup title="Mods">
-                  <FieldRow label="Active mods" hint="One mod ID per line; prepended to plugin defaults">
+                  <FieldRow label="Active mods" hint="One mod ID per line">
                     <ModsArea
                       value={form.mods}
                       onChange={(v) => set("mods", v)}

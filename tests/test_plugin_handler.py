@@ -441,3 +441,4 @@ def test_plugin_handler_effective_server_name_uses_case_insensitive_friendly_map
     handler = _make_handler(tmp_path, cluster_root=tmp_path)
 
     assert handler._effective_server_name({"map": "theisland_wp"}, {}) == "The Island"
+    assert handler._effective_server_name({"display_name": "Brian Cluster", "map": "TheIsland_WP"}, {}) == "Brian Cluster The Island"
