@@ -16,6 +16,13 @@ from db.session import get_db
 
 router = APIRouter(tags=["settings"])
 _AGENT_CLUSTER_CONFIG_FIELDS = {"gameservers_root", "steamcmd_root", "cluster_name"}
+_CLOUD_APP_SETTINGS_FIELDS = {
+    "auto_refresh_enabled",
+    "auto_refresh_interval_seconds",
+    "max_log_lines_shown",
+    "auto_scroll_logs",
+    "show_confirmation_dialogs",
+}
 _INHERITED_INSTANCE_FIELDS = {
     "display_name",
     "cluster_id",
@@ -130,6 +137,33 @@ def _materialize_instance_config(previous_config: dict, submitted_config: dict, 
     return materialized
 
 
+def _unwrap_agent_command_result(result: dict) -> tuple[dict, dict]:
+    outer = result if isinstance(result, dict) else {}
+    inner = outer.get("data") if isinstance(outer.get("data"), dict) else {}
+    return outer, inner
+
+
+def _effective_agent_command_data(result: dict) -> dict:
+    _outer, inner = _unwrap_agent_command_result(result)
+    nested = inner.get("data") if isinstance(inner.get("data"), dict) else {}
+    return nested or inner
+
+
+async def _connected_agents_for_tenant(tenant_id: str, db: AsyncSession) -> list[Agent]:
+    agents_result = await db.execute(
+        select(Agent).where(
+            Agent.tenant_id == uuid.UUID(tenant_id),
+            Agent.is_revoked.is_(False),
+        )
+    )
+    return [agent for agent in agents_result.scalars().all() if is_agent_connected(str(agent.agent_id))]
+
+
+async def _first_connected_agent_for_tenant(tenant_id: str, db: AsyncSession) -> Agent | None:
+    connected = await _connected_agents_for_tenant(tenant_id, db)
+    return connected[0] if connected else None
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -176,7 +210,20 @@ async def get_app_settings(
         )
     )
     row = result.scalar_one_or_none()
-    return AppSettingsResponse(settings_json=row.settings_json if row else {})
+    settings_json = dict(row.settings_json or {}) if row else {}
+
+    agent = await _first_connected_agent_for_tenant(tenant_id, db)
+    if agent is not None:
+        cluster_result = await send_command(
+            agent_id=str(agent.agent_id),
+            command="get-cluster-config-fields",
+            payload={"fields": sorted(_AGENT_CLUSTER_CONFIG_FIELDS)},
+        )
+        cluster_data = _effective_agent_command_data(cluster_result)
+        if cluster_result.get("status") == "success" and isinstance(cluster_data.get("fields"), dict):
+            settings_json.update({k: cluster_data["fields"].get(k) for k in _AGENT_CLUSTER_CONFIG_FIELDS})
+
+    return AppSettingsResponse(settings_json=settings_json)
 
 
 @router.put("/app", response_model=AppSettingsResponse)
@@ -192,41 +239,38 @@ async def put_app_settings(
     )
     row = result.scalar_one_or_none()
 
+    submitted = dict(body.settings_json or {})
+    host_fields = {key: submitted.get(key) for key in _AGENT_CLUSTER_CONFIG_FIELDS if key in submitted}
+    cloud_fields = {key: value for key, value in submitted.items() if key in _CLOUD_APP_SETTINGS_FIELDS}
+
     if row is None:
         row = TenantSettings(
             tenant_id=uuid.UUID(tenant_id),
-            settings_json=body.settings_json,
+            settings_json=cloud_fields,
         )
         db.add(row)
     else:
-        row.settings_json = body.settings_json
+        existing = dict(row.settings_json or {})
+        for key in list(existing.keys()):
+            if key in _AGENT_CLUSTER_CONFIG_FIELDS:
+                existing.pop(key, None)
+        existing.update(cloud_fields)
+        row.settings_json = existing
         db.add(row)
 
     await db.flush()
 
-    cluster_fields = {
-        key: body.settings_json.get(key)
-        for key in _AGENT_CLUSTER_CONFIG_FIELDS
-        if key in body.settings_json
-    }
-    if cluster_fields:
-        agents_result = await db.execute(
-            select(Agent).where(
-                Agent.tenant_id == uuid.UUID(tenant_id),
-                Agent.is_revoked.is_(False),
-            )
-        )
-        for agent in agents_result.scalars().all():
-            agent_id_str = str(agent.agent_id)
-            if not is_agent_connected(agent_id_str):
-                continue
+    if host_fields:
+        for agent in await _connected_agents_for_tenant(tenant_id, db):
             await send_command(
-                agent_id=agent_id_str,
+                agent_id=str(agent.agent_id),
                 command="set-cluster-config-fields",
-                payload={"fields": cluster_fields},
+                payload={"fields": host_fields},
             )
 
-    return AppSettingsResponse(settings_json=row.settings_json)
+    response_settings = dict(row.settings_json or {})
+    response_settings.update(host_fields)
+    return AppSettingsResponse(settings_json=response_settings)
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +292,20 @@ async def get_plugin_settings(
             status_code=404,
             detail={"error": "Plugin not found", "code": "NOT_FOUND"},
         )
-    return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin.plugin_json)
+    plugin_json = dict(plugin.plugin_json or {})
+    agent = await _first_connected_agent_for_tenant(tenant_id, db)
+    if agent is not None:
+        result = await send_command(
+            agent_id=str(agent.agent_id),
+            command="get-plugin-config-fields",
+            payload={"plugin_name": plugin_name},
+        )
+        effective = _effective_agent_command_data(result)
+        if result.get("status") == "success" and isinstance(effective.get("fields"), dict):
+            merged = dict(plugin_json)
+            merged.update(effective.get("fields") or {})
+            plugin_json = merged
+    return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin_json)
 
 
 @router.put("/plugins/{plugin_name}", response_model=PluginSettingsResponse)
@@ -275,6 +332,13 @@ async def put_plugin_settings(
         )
     existing_json = dict(plugin.plugin_json or {})
     next_json = dict(body.plugin_json or {})
+    agent = await _first_connected_agent_for_tenant(tenant_id, db)
+    if agent is not None:
+        await send_command(
+            agent_id=str(agent.agent_id),
+            command="set-plugin-config-fields",
+            payload={"plugin_name": plugin_name, "fields": next_json},
+        )
     existing_json.update(next_json)
     plugin.plugin_json = existing_json
     db.add(plugin)
@@ -308,8 +372,21 @@ async def get_instance_config(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
+    config_json = dict(inst.config_json or {})
+    if inst.agent_id is not None and is_agent_connected(str(inst.agent_id)):
+        agent_result = await send_command(
+            agent_id=str(inst.agent_id),
+            command="get-instance-plugin-config-fields",
+            payload={
+                "instance_id": str(inst.instance_id),
+                "plugin_name": inst.plugin_id,
+            },
+        )
+        effective = _effective_agent_command_data(agent_result)
+        if agent_result.get("status") == "success" and isinstance(effective.get("fields"), dict):
+            config_json = dict(effective.get("fields") or {})
     effective_config = _effective_instance_config(
-        dict(inst.config_json or {}),
+        config_json,
         dict(getattr(plugin, "plugin_json", {}) or {}),
     )
     return InstanceConfigResponse(
@@ -343,6 +420,18 @@ async def put_instance_config(
     )
     plugin = plugin_result.scalar_one_or_none()
     plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
+    if inst.agent_id is not None and is_agent_connected(str(inst.agent_id)):
+        agent_current = await send_command(
+            agent_id=str(inst.agent_id),
+            command="get-instance-plugin-config-fields",
+            payload={
+                "instance_id": str(inst.instance_id),
+                "plugin_name": inst.plugin_id,
+            },
+        )
+        effective_current = _effective_agent_command_data(agent_current)
+        if agent_current.get("status") == "success" and isinstance(effective_current.get("fields"), dict):
+            previous_config = dict(effective_current.get("fields") or {})
     next_config = _materialize_instance_config(previous_config, dict(body.config_json or {}), plugin_json)
     inst.config_json = next_config
     db.add(inst)

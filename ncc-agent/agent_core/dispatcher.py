@@ -188,6 +188,25 @@ def _route(action: str, plugin_name: str, instance_id: str, payload: dict, admin
     if action == "set_cluster_config_fields":
         return admin_api.set_cluster_config_fields(payload.get("fields") or {})
 
+    if action == "get_cluster_config_fields":
+        return admin_api.get_cluster_config_fields(payload.get("fields"))
+
+    if action == "get_plugin_config_fields":
+        return admin_api.get_plugin_config_fields(plugin_name)
+
+    if action == "set_plugin_config_fields":
+        return admin_api.set_plugin_config_fields(
+            plugin_name,
+            payload.get("fields") or {},
+        )
+
+    if action == "get_instance_plugin_config_fields":
+        return admin_api.get_instance_plugin_config_fields(
+            plugin_name,
+            instance_id,
+            payload.get("fields"),
+        )
+
     if action == "install_deps":
         return admin_api.install_deps(plugin_name, instance_id)
 

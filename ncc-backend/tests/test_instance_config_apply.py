@@ -14,7 +14,14 @@ os.environ.setdefault("NCC_CORE_PATH", "E:\\NCCCloud")
 
 from fastapi import HTTPException
 
-from api.routes.settings import InstanceConfigBody, PluginSettingsBody, put_instance_config, put_plugin_settings
+from api.routes.settings import (
+    InstanceConfigBody,
+    PluginSettingsBody,
+    get_instance_config,
+    get_plugin_settings,
+    put_instance_config,
+    put_plugin_settings,
+)
 
 
 def _scalar_result(value):
@@ -80,7 +87,12 @@ async def test_put_instance_config_routes_changes_through_agent_apply_path():
 
     with patch("api.routes.settings.is_agent_connected", return_value=True), patch(
         "api.routes.settings.send_command",
-        new=AsyncMock(return_value=agent_apply),
+        new=AsyncMock(
+            side_effect=[
+                {"status": "success", "data": {"fields": inst.config_json}},
+                agent_apply,
+            ]
+        ),
     ) as mock_send:
         response = await put_instance_config(
             instance_id=str(instance_id),
@@ -89,7 +101,7 @@ async def test_put_instance_config_routes_changes_through_agent_apply_path():
             db=db,
         )
 
-    sent_payload = mock_send.await_args.kwargs["payload"]
+    sent_payload = mock_send.await_args_list[-1].kwargs["payload"]
     assert sent_payload["fields"] == {
         "game_port": 7779,
         "rcon_port": 27021,
@@ -215,3 +227,96 @@ async def test_put_plugin_settings_rejects_non_numeric_cluster_id():
         )
 
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_plugin_settings_prefers_host_local_fields_when_agent_is_connected():
+    tenant_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    plugin = types.SimpleNamespace(
+        plugin_id="ark",
+        plugin_json={"display_name": "Cloud Name", "cluster_id": "1234"},
+    )
+    agent = types.SimpleNamespace(agent_id=agent_id, tenant_id=tenant_id, is_revoked=False)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_scalar_result(plugin))
+
+    with patch("api.routes.settings._first_connected_agent_for_tenant", new=AsyncMock(return_value=agent)), patch(
+        "api.routes.settings.send_command",
+        new=AsyncMock(return_value={"status": "success", "data": {"fields": {"display_name": "Local Name"}}}),
+    ):
+        response = await get_plugin_settings(
+            plugin_name="ark",
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.plugin_json["display_name"] == "Local Name"
+    assert response.plugin_json["cluster_id"] == "1234"
+
+
+@pytest.mark.asyncio
+async def test_put_plugin_settings_relays_to_agent_and_keeps_db_mirror():
+    tenant_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    plugin = types.SimpleNamespace(plugin_id="ark", plugin_json={"display_name": "Old"})
+    agent = types.SimpleNamespace(agent_id=agent_id, tenant_id=tenant_id, is_revoked=False)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_scalar_result(plugin))
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    with patch("api.routes.settings._first_connected_agent_for_tenant", new=AsyncMock(return_value=agent)), patch(
+        "api.routes.settings.send_command",
+        new=AsyncMock(return_value={"status": "success"}),
+    ) as mock_send:
+        response = await put_plugin_settings(
+            plugin_name="ark",
+            body=PluginSettingsBody(plugin_json={"display_name": "New"}),
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert mock_send.await_args.kwargs["payload"] == {
+        "plugin_name": "ark",
+        "fields": {"display_name": "New"},
+    }
+    assert plugin.plugin_json["display_name"] == "New"
+    assert response.plugin_json["display_name"] == "New"
+
+
+@pytest.mark.asyncio
+async def test_get_instance_config_prefers_host_local_fields_when_agent_is_connected():
+    tenant_id = uuid.uuid4()
+    instance_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    inst = types.SimpleNamespace(
+        instance_id=instance_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        plugin_id="ark",
+        config_json={"map": "CloudMap_WP"},
+    )
+    plugin_catalog = types.SimpleNamespace(plugin_json={"display_name": "Brian Cluster"})
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(inst),
+            _scalar_result(plugin_catalog),
+        ]
+    )
+
+    with patch("api.routes.settings.is_agent_connected", return_value=True), patch(
+        "api.routes.settings.send_command",
+        new=AsyncMock(return_value={"status": "success", "data": {"fields": {"map": "TheIsland_WP"}}}),
+    ):
+        response = await get_instance_config(
+            instance_id=str(instance_id),
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.config_json["map"] == "TheIsland_WP"
