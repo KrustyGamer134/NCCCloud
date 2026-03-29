@@ -107,14 +107,12 @@ async def _authenticate_agent(
 
 async def _update_agent_last_seen(agent_id: str) -> None:
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Agent).where(Agent.agent_id == uuid.UUID(agent_id))
+        await db.execute(
+            update(Agent)
+            .where(Agent.agent_id == uuid.UUID(agent_id))
+            .values(last_seen=datetime.now(tz=timezone.utc))
         )
-        agent = result.scalar_one_or_none()
-        if agent:
-            agent.last_seen = datetime.now(tz=timezone.utc)
-            db.add(agent)
-            await db.commit()
+        await db.commit()
 
 
 async def _handle_status_update(agent: Agent, data: dict[str, Any]) -> None:

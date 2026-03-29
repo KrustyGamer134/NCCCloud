@@ -98,3 +98,47 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
     assert response.logs["server"]["data"]["lines"] == ["runtime line"]
     commands = [call.kwargs["command"] for call in mock_send.await_args_list]
     assert commands == ["get-status", "get-install-progress", "fetch-logs", "fetch-logs", "fetch-logs"]
+
+
+@pytest.mark.asyncio
+async def test_get_instance_detail_preserves_section_errors():
+    tenant_id = uuid.uuid4()
+    instance_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    inst = types.SimpleNamespace(
+        instance_id=instance_id,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        plugin_id="ark",
+        display_name="Ark Test",
+        config_json={"map": "TheIsland_WP"},
+        status="unknown",
+        install_status="not_installed",
+        agent_last_seen=None,
+        created_at=None,
+    )
+    plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(inst),
+            _scalar_result(plugin_catalog),
+        ]
+    )
+    request = types.SimpleNamespace(state=types.SimpleNamespace(user_id="user-1"))
+
+    with patch("api.routes.instances.is_agent_connected", return_value=False), patch(
+        "api.routes.agents.is_agent_connected", return_value=False
+    ):
+        response = await get_instance_detail(
+            str(instance_id),
+            request=request,
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.status["status"] == "error"
+    assert response.status["code"] == "AGENT_OFFLINE"
+    assert response.install_progress["status"] == "error"
+    assert response.logs["install_server"]["status"] == "error"

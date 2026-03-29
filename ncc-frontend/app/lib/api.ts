@@ -220,30 +220,16 @@ export async function fetchAgents(token: string) {
   const res = await fetch(`${API_URL}/agents`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
-  console.log("AGENTS STATUS:", res.status);
-
-  const text = await res.text();
-  console.log("AGENTS RESPONSE:", text);
-
   if (!res.ok) throw new Error("Failed to fetch agents");
-
-  return JSON.parse(text);
+  return res.json();
 }
 
 export async function fetchInstances(token: string) {
   const res = await fetch(`${API_URL}/instances`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-
-  console.log("INSTANCES STATUS:", res.status);
-
-  const text = await res.text();
-  console.log("INSTANCES RESPONSE:", text);
-
   if (!res.ok) throw new Error("Failed to fetch instances");
-
-  return JSON.parse(text);
+  return res.json();
 }
 
 export async function fetchInstanceDetail(token: string, instanceId: string): Promise<InstanceDetailResponse> {

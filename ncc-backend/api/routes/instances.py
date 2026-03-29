@@ -169,6 +169,22 @@ def _raise_agent_command_error(result: dict) -> None:
         raise HTTPException(status_code=409, detail=inner)
 
 
+def _agent_read_error_result(command: str, exc: HTTPException) -> dict:
+    detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+    code = str(detail.get("code") or "").strip() or "AGENT_READ_FAILED"
+    message = str(detail.get("error") or detail.get("message") or "Agent read failed").strip()
+    return {
+        "status": "error",
+        "code": code,
+        "message": message,
+        "data": {
+            "command": command,
+            "code": code,
+            "message": message,
+        },
+    }
+
+
 async def _provision_instance_on_agent(
     *,
     inst: Instance,
@@ -437,10 +453,16 @@ async def _safe_agent_read(
     audit: bool = True,
 ) -> dict | None:
     if inst.agent_id is None:
-        return None
+        return _agent_read_error_result(
+            command,
+            HTTPException(status_code=409, detail={"error": "No agent assigned to this instance", "code": "NO_AGENT"}),
+        )
     agent_id_str = str(inst.agent_id)
     if not is_agent_connected(agent_id_str):
-        return None
+        return _agent_read_error_result(
+            command,
+            HTTPException(status_code=503, detail={"error": "Agent is not connected", "code": "AGENT_OFFLINE"}),
+        )
     try:
         return await _read_instance_from_agent(
             inst=inst,
@@ -452,8 +474,8 @@ async def _safe_agent_read(
             plugin_json=plugin_json,
             audit=audit,
         )
-    except HTTPException:
-        return None
+    except HTTPException as exc:
+        return _agent_read_error_result(command, exc)
 
 
 @router.get("", response_model=list[InstanceResponse])

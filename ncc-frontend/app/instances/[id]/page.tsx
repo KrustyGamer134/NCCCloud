@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchInstanceDetail, runInstanceAction, type InstanceDetailResponse } from "../../lib/api";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
+
 function StatusBadge({ label }: { label: string }) {
   const lowered = String(label || "unknown").toLowerCase();
   const style =
@@ -96,6 +98,17 @@ function formatPercent(value: unknown) {
 
 function resolveLogLines(primary: string[] | undefined, fallback: string[] | undefined) {
   return Array.isArray(primary) && primary.length > 0 ? primary : Array.isArray(fallback) ? fallback : [];
+}
+
+function hasSectionError(section: { status?: string; code?: unknown; message?: unknown; data?: Record<string, unknown> } | null | undefined) {
+  return String(section?.status ?? "").toLowerCase() === "error";
+}
+
+function sectionErrorMessage(
+  section: { code?: unknown; message?: unknown; data?: Record<string, unknown> } | null | undefined,
+  fallback: string,
+) {
+  return String(section?.message ?? section?.data?.message ?? fallback);
 }
 
 function deriveValidateProgress(lines: string[], metadata: Record<string, unknown> | null | undefined) {
@@ -359,6 +372,19 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const runtimeLogLines = resolveLogLines(detail?.logs.server?.data?.lines, []);
   const progressMetadata = detail?.install_progress?.data?.progress_metadata;
   const steamcmdProgress = detail?.install_progress?.data?.steamcmd_progress;
+  const statusReadError = hasSectionError(detail?.status) ? sectionErrorMessage(detail?.status, "Status snapshot is temporarily unavailable.") : null;
+  const progressReadError = hasSectionError(detail?.install_progress)
+    ? sectionErrorMessage(detail?.install_progress, "Install progress is temporarily unavailable.")
+    : null;
+  const installLogReadError = hasSectionError(detail?.logs.install_server)
+    ? sectionErrorMessage(detail?.logs.install_server, "Install log is temporarily unavailable.")
+    : null;
+  const steamcmdLogReadError = hasSectionError(detail?.logs.steamcmd_install)
+    ? sectionErrorMessage(detail?.logs.steamcmd_install, "SteamCMD log is temporarily unavailable.")
+    : null;
+  const runtimeLogReadError = hasSectionError(detail?.logs.server)
+    ? sectionErrorMessage(detail?.logs.server, "Runtime log is temporarily unavailable.")
+    : null;
   const configuredMap = detail?.instance.config_json?.map != null ? String(detail.instance.config_json.map) : "loading";
   const agentOnline = detail?.instance.agent_online;
   const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
@@ -396,19 +422,28 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     ? "Startup progress is coming from the lifecycle snapshot and runtime readiness."
     : view.stopActive
     ? "Shutdown progress is coming from the lifecycle snapshot while the host reconciles runtime state."
+    : progressReadError
+    ? progressReadError
     : "No active install or lifecycle transition is reported by the backend.";
   const latestInstallLine = recentProgressLine(installLogLines);
   const latestSteamcmdLine = recentProgressLine(steamcmdLogLines);
   const parsedSteamcmdProgress = deriveSteamcmdProgress(steamcmdProgress, steamcmdLogLines);
   const installStepStatus =
+    progressReadError
+      ? "error"
+      :
     parsedSteamcmdProgress?.installStatus ??
     (view.failed ? "error" : view.installActive ? "active" : view.installed ? "done" : "idle");
   const installStepDetail =
+    progressReadError ??
     parsedSteamcmdProgress?.installDetail ??
     latestInstallLine ??
     latestSteamcmdLine ??
     (view.installActive ? "Waiting for host install output." : view.installed ? "Server files are present on the host." : "Install has not started yet.");
   const validateStep =
+    progressReadError
+      ? { status: "error" as const, detail: progressReadError }
+      :
     parsedSteamcmdProgress
       ? { status: parsedSteamcmdProgress.validateStatus, detail: parsedSteamcmdProgress.validateDetail }
       : deriveValidateProgress(steamcmdLogLines, progressMetadata);
@@ -422,6 +457,46 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
 
     return () => window.clearTimeout(timer);
   }, [detail, instanceId, loadDetail, shouldAutoRefresh]);
+
+  useEffect(() => {
+    if (!instanceId) return;
+
+    let closed = false;
+    let socket: WebSocket | null = null;
+
+    async function connect() {
+      try {
+        const token = await getToken();
+        if (!token || closed) return;
+        const wsUrl = `${API_URL.replace(/^http/i, "ws")}/ws/events?token=${encodeURIComponent(token)}`;
+        socket = new WebSocket(wsUrl);
+        socket.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(String(event.data ?? "{}")) as {
+              type?: string;
+              instances?: Array<{ instance_id?: string }>;
+            };
+            if (payload.type !== "status_update") return;
+            if (!Array.isArray(payload.instances)) return;
+            if (payload.instances.some((item) => String(item?.instance_id ?? "") === instanceId)) {
+              void loadDetail();
+            }
+          } catch {
+            return;
+          }
+        };
+      } catch {
+        return;
+      }
+    }
+
+    void connect();
+
+    return () => {
+      closed = true;
+      socket?.close();
+    };
+  }, [getToken, instanceId, loadDetail]);
 
   async function handleAction(action: "install-server" | "start" | "stop" | "restart") {
     if (!instanceId) return;
@@ -581,6 +656,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             <section className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
                 <div className="mb-3 text-sm font-medium text-white">Status Snapshot</div>
+                {statusReadError && <div className="mb-3 rounded border border-yellow-800 bg-yellow-950 px-3 py-2 text-xs text-yellow-200">{statusReadError}</div>}
                 <dl className="space-y-2 text-sm text-gray-300">
                   <div className="flex justify-between gap-3">
                     <dt className="text-gray-500">Runtime running</dt>
@@ -622,9 +698,9 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             </section>
 
             <div className="grid gap-4 lg:grid-cols-3">
-              <LogBlock title="Install Log" lines={installLogLines} />
-              <LogBlock title="SteamCMD Log" lines={steamcmdLogLines} />
-              <LogBlock title="Runtime Log" lines={runtimeLogLines} />
+              <LogBlock title="Install Log" lines={installLogReadError ? [installLogReadError] : installLogLines} />
+              <LogBlock title="SteamCMD Log" lines={steamcmdLogReadError ? [steamcmdLogReadError] : steamcmdLogLines} />
+              <LogBlock title="Runtime Log" lines={runtimeLogReadError ? [runtimeLogReadError] : runtimeLogLines} />
             </div>
           </div>
         ) : (
