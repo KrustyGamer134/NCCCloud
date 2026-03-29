@@ -1186,8 +1186,9 @@ class AdminAPI:
                 if cluster_fields.get(key):
                     defaults[key] = cluster_fields.get(key)
             metadata = {}
-            if hasattr(self._registry, "get_metadata"):
-                metadata = self._registry.get_metadata(str(plugin_name)) or {}
+            registry = getattr(self, "_registry", None)
+            if registry is not None and hasattr(registry, "get_metadata"):
+                metadata = registry.get_metadata(str(plugin_name)) or {}
             layout = resolve_steam_game_master_layout(
                 defaults,
                 plugin_name=str(plugin_name),
@@ -1298,8 +1299,9 @@ class AdminAPI:
                 if cluster_fields.get(key):
                     defaults[key] = cluster_fields.get(key)
             metadata = {}
-            if hasattr(self._registry, "get_metadata"):
-                metadata = self._registry.get_metadata(str(plugin_name)) or {}
+            registry = getattr(self, "_registry", None)
+            if registry is not None and hasattr(registry, "get_metadata"):
+                metadata = registry.get_metadata(str(plugin_name)) or {}
             layout = resolve_steam_game_master_layout(
                 defaults,
                 plugin_name=str(plugin_name),
@@ -1907,7 +1909,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 
