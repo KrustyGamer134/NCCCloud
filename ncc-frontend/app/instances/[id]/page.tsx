@@ -405,8 +405,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     (view.failed ? "error" : view.installActive ? "active" : view.installed ? "done" : "idle");
   const installStepDetail =
     parsedSteamcmdProgress?.installDetail ??
-    latestInstallLine ||
-    latestSteamcmdLine ||
+    latestInstallLine ??
+    latestSteamcmdLine ??
     (view.installActive ? "Waiting for host install output." : view.installed ? "Server files are present on the host." : "Install has not started yet.");
   const validateStep =
     parsedSteamcmdProgress
