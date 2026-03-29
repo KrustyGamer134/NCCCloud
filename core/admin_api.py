@@ -1137,6 +1137,8 @@ class AdminAPI:
 
     def get_log_tail(self, plugin_name, instance_id, log_name, last_lines=200):
         from pathlib import Path
+        from core.instance_layout import resolve_steam_game_master_layout
+        from core.plugin_config import load_plugin_defaults
 
         resolved = self._resolve_instance_path_context(plugin_name, instance_id)
         if not isinstance(resolved, dict) or resolved.get("status") != "success":
@@ -1168,7 +1170,51 @@ class AdminAPI:
         else:
             file_name = f"{log_key}.log"
 
+        def _master_logs_root():
+            cluster_root = str(getattr(self._orchestrator, "_cluster_root", "") or "").strip()
+            if not cluster_root:
+                return ""
+            try:
+                defaults = load_plugin_defaults(cluster_root, str(plugin_name))
+            except Exception:
+                defaults = {}
+            cluster_cfg = self.get_cluster_config_fields(["gameservers_root", "steamcmd_root", "cluster_name"])
+            cluster_fields = {}
+            if isinstance(cluster_cfg, dict) and cluster_cfg.get("status") == "success":
+                cluster_fields = cluster_cfg.get("data", {}).get("fields", {}) or {}
+            for key in ("gameservers_root", "steamcmd_root", "cluster_name"):
+                if cluster_fields.get(key):
+                    defaults[key] = cluster_fields.get(key)
+            metadata = {}
+            if hasattr(self._registry, "get_metadata"):
+                metadata = self._registry.get_metadata(str(plugin_name)) or {}
+            layout = resolve_steam_game_master_layout(
+                defaults,
+                plugin_name=str(plugin_name),
+                default_install_folder=str((metadata or {}).get("install_subfolder") or ""),
+            )
+            return str((layout or {}).get("logs_dir") or "").strip()
+
+        def _instance_install_status_text():
+            getter = getattr(self._orchestrator, "get_instance_install_status", None)
+            if not callable(getter):
+                return ""
+            try:
+                return str(getter(plugin_name, instance_id) or "").strip().upper()
+            except Exception:
+                return ""
+
         path = Path(logs_root) / file_name
+        if (
+            (not path.exists() or not path.is_file())
+            and _instance_install_status_text() == "INSTALLING"
+            and file_name in {"install_server.log", "steamcmd_install.log"}
+        ):
+            master_logs_root = _master_logs_root()
+            if master_logs_root:
+                candidate = Path(master_logs_root) / file_name
+                if candidate.exists() and candidate.is_file():
+                    path = candidate
         if not path.exists() or not path.is_file():
             return {
                 "status": "success",
@@ -1204,6 +1250,8 @@ class AdminAPI:
         from pathlib import Path
         import json
         import re
+        from core.instance_layout import resolve_steam_game_master_layout
+        from core.plugin_config import load_plugin_defaults
 
         resolved = self._resolve_instance_path_context(plugin_name, instance_id)
         if not isinstance(resolved, dict) or resolved.get("status") != "success":
@@ -1233,6 +1281,49 @@ class AdminAPI:
         install_log_path = logs_path / "install_server.log"
         steamcmd_log_path = logs_path / "steamcmd_install.log"
         progress_metadata_path = logs_path / "steamcmd_progress_source.json"
+
+        def _master_logs_paths():
+            cluster_root = str(getattr(self._orchestrator, "_cluster_root", "") or "").strip()
+            if not cluster_root:
+                return None
+            try:
+                defaults = load_plugin_defaults(cluster_root, str(plugin_name))
+            except Exception:
+                defaults = {}
+            cluster_cfg = self.get_cluster_config_fields(["gameservers_root", "steamcmd_root", "cluster_name"])
+            cluster_fields = {}
+            if isinstance(cluster_cfg, dict) and cluster_cfg.get("status") == "success":
+                cluster_fields = cluster_cfg.get("data", {}).get("fields", {}) or {}
+            for key in ("gameservers_root", "steamcmd_root", "cluster_name"):
+                if cluster_fields.get(key):
+                    defaults[key] = cluster_fields.get(key)
+            metadata = {}
+            if hasattr(self._registry, "get_metadata"):
+                metadata = self._registry.get_metadata(str(plugin_name)) or {}
+            layout = resolve_steam_game_master_layout(
+                defaults,
+                plugin_name=str(plugin_name),
+                default_install_folder=str((metadata or {}).get("install_subfolder") or ""),
+            )
+            master_logs_root = str((layout or {}).get("logs_dir") or "").strip()
+            if not master_logs_root:
+                return None
+            root = Path(master_logs_root)
+            return {
+                "logs_path": root,
+                "install_log_path": root / "install_server.log",
+                "steamcmd_log_path": root / "steamcmd_install.log",
+                "progress_metadata_path": root / "steamcmd_progress_source.json",
+            }
+
+        def _instance_install_status_text():
+            getter = getattr(self._orchestrator, "get_instance_install_status", None)
+            if not callable(getter):
+                return ""
+            try:
+                return str(getter(plugin_name, instance_id) or "").strip().upper()
+            except Exception:
+                return ""
 
         def _tail(path: Path):
             if not path.exists() or not path.is_file():
@@ -1304,6 +1395,27 @@ class AdminAPI:
                 metadata = None
 
         install_found, install_tail = _tail(install_log_path)
+        if not install_found and _instance_install_status_text() == "INSTALLING":
+            master_paths = _master_logs_paths()
+            if master_paths:
+                master_install_found, master_install_tail = _tail(master_paths["install_log_path"])
+                master_metadata = None
+                master_progress_metadata_path = master_paths["progress_metadata_path"]
+                if master_progress_metadata_path.exists() and master_progress_metadata_path.is_file():
+                    try:
+                        raw = json.loads(master_progress_metadata_path.read_text(encoding="utf-8-sig"))
+                        if isinstance(raw, dict):
+                            master_metadata = raw
+                    except Exception:
+                        master_metadata = None
+                if master_install_found or master_metadata is not None:
+                    logs_path = master_paths["logs_path"]
+                    install_log_path = master_paths["install_log_path"]
+                    steamcmd_log_path = master_paths["steamcmd_log_path"]
+                    progress_metadata_path = master_progress_metadata_path
+                    install_found = master_install_found
+                    install_tail = master_install_tail
+                    metadata = master_metadata
         if not isinstance(metadata, dict):
             metadata = _recover_progress_metadata_from_install_log(install_log_path)
         elif not str(metadata.get("log_path") or "").strip():
@@ -1795,8 +1907,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
-
 
 
 
