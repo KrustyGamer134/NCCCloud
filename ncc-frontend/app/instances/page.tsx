@@ -366,7 +366,7 @@ export default function InstancesPage() {
       setDiscoverAgents(agts);
       setDiscoverPluginId(plugs[0]?.plugin_id ?? "");
       setDiscoverAgentId(
-        agts.find((a) => a.is_connected)?.agent_id ?? agts[0]?.agent_id ?? ""
+        agts.find((a: Agent) => a.is_connected)?.agent_id ?? agts[0]?.agent_id ?? ""
       );
 
       setDiscoverServers(servers);

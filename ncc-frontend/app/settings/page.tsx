@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, UserButton } from "@clerk/nextjs";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -22,7 +22,7 @@ import {
 interface Plugin {
   plugin_id: string;
   display_name: string;
-  description: string | null;
+  description?: string | null;
 }
 
 interface Instance {
@@ -1128,7 +1128,7 @@ function InstanceConfigTab({
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { getToken } = useAuth();
   const searchParams = useSearchParams();
 
@@ -1249,5 +1249,19 @@ export default function SettingsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-950 text-white">
+          <div className="px-6 py-8 text-sm text-gray-500">Loading settings…</div>
+        </div>
+      }
+    >
+      <SettingsPageContent />
+    </Suspense>
   );
 }
