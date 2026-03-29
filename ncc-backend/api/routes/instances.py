@@ -369,6 +369,7 @@ async def _read_instance_from_agent(
     tenant_id: str,
     db: AsyncSession,
     plugin_json: dict | None = None,
+    audit: bool = True,
 ) -> dict:
     if inst.agent_id is None:
         raise HTTPException(
@@ -403,16 +404,17 @@ async def _read_instance_from_agent(
         },
     )
 
-    await write_audit_log(
-        db=db,
-        tenant_id=tenant_id,
-        action=f"instance.read.{command}",
-        outcome=result.get("status", "unknown"),
-        user_id=getattr(request.state, "user_id", None),
-        agent_id=inst.agent_id,
-        instance_id=inst.instance_id,
-        detail=result,
-    )
+    if audit:
+        await write_audit_log(
+            db=db,
+            tenant_id=tenant_id,
+            action=f"instance.read.{command}",
+            outcome=result.get("status", "unknown"),
+            user_id=getattr(request.state, "user_id", None),
+            agent_id=inst.agent_id,
+            instance_id=inst.instance_id,
+            detail=result,
+        )
 
     code = result.get("code", "")
     if code == "agent_offline":
@@ -432,6 +434,7 @@ async def _safe_agent_read(
     tenant_id: str,
     db: AsyncSession,
     plugin_json: dict | None = None,
+    audit: bool = True,
 ) -> dict | None:
     if inst.agent_id is None:
         return None
@@ -447,6 +450,7 @@ async def _safe_agent_read(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=audit,
         )
     except HTTPException:
         return None
@@ -529,6 +533,7 @@ async def get_instance_detail(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=False,
         ),
         _safe_agent_read(
             inst=inst,
@@ -538,6 +543,7 @@ async def get_instance_detail(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=False,
         ),
         _safe_agent_read(
             inst=inst,
@@ -547,6 +553,7 @@ async def get_instance_detail(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=False,
         ),
         _safe_agent_read(
             inst=inst,
@@ -556,6 +563,7 @@ async def get_instance_detail(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=False,
         ),
         _safe_agent_read(
             inst=inst,
@@ -565,6 +573,7 @@ async def get_instance_detail(
             tenant_id=tenant_id,
             db=db,
             plugin_json=plugin_json,
+            audit=False,
         ),
     )
 
