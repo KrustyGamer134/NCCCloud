@@ -308,6 +308,54 @@ def test_get_install_progress_prefers_live_installer_progress_artifact(tmp_path)
     assert response["data"]["paths"]["live_progress"] == str(logs_dir / "steamcmd_live_progress.json")
 
 
+def test_get_install_progress_parses_timestamped_steamcmd_lines(tmp_path):
+    plugin_name = "ark"
+    instance_id = "16"
+    install_root = tmp_path / "GameServers" / "ArkSA" / "TheIsland_WP"
+    logs_dir = install_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    plugin_defaults = tmp_path / "plugins" / plugin_name
+    plugin_defaults.mkdir(parents=True, exist_ok=True)
+    (plugin_defaults / "plugin_defaults.json").write_text(
+        json.dumps({"schema_version": 1, "mods": [], "passive_mods": []}),
+        encoding="utf-8",
+    )
+
+    instance_config_dir = tmp_path / "plugins" / plugin_name / "instances" / instance_id / "config"
+    instance_config_dir.mkdir(parents=True, exist_ok=True)
+    (instance_config_dir / "instance_config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "map": "TheIsland_WP",
+                "install_root": str(install_root),
+                "mods": [],
+                "passive_mods": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    (logs_dir / "steamcmd_install.log").write_text(
+        "\n".join(
+            [
+                "[2026-03-29 16:33:49]  Update state (0x61) downloading, progress: 21.41 (2805032039 / 13098662534)",
+                "[2026-03-29 16:33:55]  Update state (0x61) downloading, progress: 22.78 (2983289959 / 13098662534)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    api = AdminAPI(_StubOrchestrator(tmp_path))
+    response = api.get_install_progress(plugin_name, instance_id, last_lines=50)
+
+    assert response["status"] == "success"
+    assert response["data"]["state"] == "running"
+    assert response["data"]["steamcmd_progress"]["phase"] == "downloading"
+    assert response["data"]["steamcmd_progress"]["percent"] == 22.78
+
+
 def test_get_log_tail_falls_back_to_master_logs_while_installing(tmp_path):
     plugin_name = "ark"
     instance_id = "14"

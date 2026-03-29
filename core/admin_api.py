@@ -1476,7 +1476,7 @@ class AdminAPI:
                     continue
                 lowered = line.lower()
                 match = re.search(
-                    r"Update state \((0x[0-9a-fA-F]+)\)\s+([^,]+),\s+progress:\s+([0-9]+(?:\.[0-9]+)?)\s+\(([0-9]+)\s*/\s*([0-9]+)\)",
+                    r"(?:\[[^\]]+\]\s*)?Update state \((0x[0-9a-fA-F]+)\)\s+([^,]+),\s+progress:\s+([0-9]+(?:\.[0-9]+)?)\s+\(([0-9]+)\s*/\s*([0-9]+)\)",
                     line,
                 )
                 if match:
@@ -1942,7 +1942,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 
