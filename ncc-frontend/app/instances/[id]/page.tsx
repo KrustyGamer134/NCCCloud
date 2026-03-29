@@ -100,6 +100,13 @@ function resolveLogLines(primary: string[] | undefined, fallback: string[] | und
   return Array.isArray(primary) && primary.length > 0 ? primary : Array.isArray(fallback) ? fallback : [];
 }
 
+function unwrapNestedData(value: unknown): Record<string, unknown> {
+  const outer = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const directData = outer.data && typeof outer.data === "object" ? (outer.data as Record<string, unknown>) : null;
+  const nestedData = directData?.data && typeof directData.data === "object" ? (directData.data as Record<string, unknown>) : null;
+  return nestedData ?? directData ?? outer;
+}
+
 function hasSectionError(section: { status?: string; code?: unknown; message?: unknown; data?: Record<string, unknown> } | null | undefined) {
   return String(section?.status ?? "").toLowerCase() === "error";
 }
@@ -356,22 +363,27 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     void loadDetail();
   }, [loadDetail]);
 
-  const statusState = detail?.status?.data?.state ?? detail?.instance.status ?? "unknown";
-  const installStatus = detail?.status?.data?.install_status ?? detail?.instance.install_status ?? "unknown";
-  const progressState = detail?.install_progress?.data?.state ?? "not_started";
-  const runtimeRunning = Boolean(detail?.status?.data?.runtime_running);
-  const runtimeReady = Boolean(detail?.status?.data?.runtime_ready);
+  const statusData = unwrapNestedData(detail?.status);
+  const installProgressData = unwrapNestedData(detail?.install_progress);
+  const installServerLogData = unwrapNestedData(detail?.logs.install_server);
+  const steamcmdInstallLogData = unwrapNestedData(detail?.logs.steamcmd_install);
+  const runtimeLogData = unwrapNestedData(detail?.logs.server);
+  const statusState = String(statusData.state ?? detail?.instance.status ?? "unknown");
+  const installStatus = String(statusData.install_status ?? detail?.instance.install_status ?? "unknown");
+  const progressState = String(installProgressData.state ?? "not_started");
+  const runtimeRunning = Boolean(statusData.runtime_running);
+  const runtimeReady = Boolean(statusData.runtime_ready);
   const installLogLines = resolveLogLines(
-    detail?.logs.install_server?.data?.lines,
-    detail?.install_progress?.data?.install_log_tail,
+    installServerLogData.lines as string[] | undefined,
+    installProgressData.install_log_tail as string[] | undefined,
   );
   const steamcmdLogLines = resolveLogLines(
-    detail?.logs.steamcmd_install?.data?.lines,
-    detail?.install_progress?.data?.steamcmd_log_tail,
+    steamcmdInstallLogData.lines as string[] | undefined,
+    installProgressData.steamcmd_log_tail as string[] | undefined,
   );
-  const runtimeLogLines = resolveLogLines(detail?.logs.server?.data?.lines, []);
-  const progressMetadata = detail?.install_progress?.data?.progress_metadata;
-  const steamcmdProgress = detail?.install_progress?.data?.steamcmd_progress;
+  const runtimeLogLines = resolveLogLines(runtimeLogData.lines as string[] | undefined, []);
+  const progressMetadata = (installProgressData.progress_metadata as Record<string, unknown> | null | undefined) ?? null;
+  const steamcmdProgress = installProgressData.steamcmd_progress;
   const statusReadError = hasSectionError(detail?.status) ? sectionErrorMessage(detail?.status, "Status snapshot is temporarily unavailable.") : null;
   const progressReadError = hasSectionError(detail?.install_progress)
     ? sectionErrorMessage(detail?.install_progress, "Install progress is temporarily unavailable.")
