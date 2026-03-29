@@ -55,12 +55,13 @@ class _FakeSteamCmdProc:
             exe = server_dir / "ShooterGame" / "Binaries" / "Win64" / "ArkAscendedServer.exe"
             exe.parent.mkdir(parents=True, exist_ok=True)
             exe.write_text("stub", encoding="utf-8")
-        if stdout is not None:
-            stdout.write("Loading Steam API...OK\n")
+        self.stdout = _FakeStdout("Loading Steam API...OK\n")
         self.returncode = 0
 
-    def communicate(self, timeout=None):
-        return ("", "")
+    def poll(self):
+        if self.stdout.done:
+            return self.returncode
+        return None
 
     def wait(self, timeout=None):
         return self.returncode
@@ -69,14 +70,42 @@ class _FakeSteamCmdProc:
         pass
 
 
+class _FakeStdout:
+    def __init__(self, text: str):
+        self._lines = [line + "\n" for line in str(text or "").splitlines()]
+        self._index = 0
+
+    @property
+    def done(self):
+        return self._index >= len(self._lines)
+
+    def readline(self):
+        if self.done:
+            return ""
+        value = self._lines[self._index]
+        self._index += 1
+        return value
+
+    def read(self):
+        if self.done:
+            return ""
+        value = "".join(self._lines[self._index :])
+        self._index = len(self._lines)
+        return value
+
+    def close(self):
+        return None
+
+
 class _FakeSteamCmdFailProc:
     def __init__(self, argv, cwd=None, shell=False, stdout=None, stderr=None, startupinfo=None, **kwargs):
-        if stdout is not None:
-            stdout.write("line1\nline2\n")
+        self.stdout = _FakeStdout("line1\nline2\n")
         self.returncode = 8
 
-    def communicate(self, timeout=None):
-        return ("", "")
+    def poll(self):
+        if self.stdout.done:
+            return self.returncode
+        return None
 
     def wait(self, timeout=None):
         return self.returncode
@@ -87,27 +116,41 @@ class _FakeSteamCmdFailProc:
 
 class _FakeSteamCmdFatalProc:
     def __init__(self, argv, cwd=None, shell=False, stdout=None, stderr=None, startupinfo=None, **kwargs):
-        if stdout is not None:
-            stdout.write("Loading Steam API...OK\n")
-            stdout.write("ERROR! Failed to install app '2430930'\n")
+        self.stdout = _FakeStdout("Loading Steam API...OK\nERROR! Failed to install app '2430930'\n")
         self.returncode = 0
 
-    def communicate(self, timeout=None):
-        return ("", "")
+    def poll(self):
+        if self.stdout.done:
+            return self.returncode
+        return None
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        pass
 
 
 class _FakeSteamCmdTimeoutProc:
     def __init__(self, argv, cwd=None, shell=False, stdout=None, stderr=None, startupinfo=None, **kwargs):
+        class _TimeoutStdout:
+            def readline(self_inner):
+                raise subprocess.TimeoutExpired(cmd=["steamcmd.exe"], timeout=1)
+
+            def read(self_inner):
+                return ""
+
+            def close(self_inner):
+                return None
+
+        self.stdout = _TimeoutStdout()
         self.returncode = None
-
-    def communicate(self, timeout=None):
-        raise subprocess.TimeoutExpired(cmd=["steamcmd.exe"], timeout=timeout)
-
-    def kill(self):
-        self.returncode = -9
 
     def wait(self, timeout=None):
         return self.returncode
+
+    def kill(self):
+        self.returncode = -9
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only provisioning scope")

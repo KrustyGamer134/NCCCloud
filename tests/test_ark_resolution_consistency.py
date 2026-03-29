@@ -106,18 +106,45 @@ def test_resolution_consistency_across_validate_install_deps_install_server_and_
                 exe = server_dir / "ShooterGame" / "Binaries" / "Win64" / "ArkAscendedServer.exe"
                 exe.parent.mkdir(parents=True, exist_ok=True)
                 exe.write_text("stub", encoding="utf-8")
-                if stdout is not None:
-                    stdout.write("Loading Steam API...OK\n")
+            self.stdout = _FakeStdout("Loading Steam API...OK\n")
             self.returncode = 0
 
-        def communicate(self, timeout=None):
-            return ("", "")
+        def poll(self):
+            if self.stdout.done:
+                return self.returncode
+            return None
 
         def wait(self, timeout=None):
             return self.returncode
 
         def kill(self):
             pass
+
+    class _FakeStdout:
+        def __init__(self, text: str):
+            self._lines = [line + "\n" for line in str(text or "").splitlines()]
+            self._index = 0
+
+        @property
+        def done(self):
+            return self._index >= len(self._lines)
+
+        def readline(self):
+            if self.done:
+                return ""
+            value = self._lines[self._index]
+            self._index += 1
+            return value
+
+        def read(self):
+            if self.done:
+                return ""
+            value = "".join(self._lines[self._index :])
+            self._index = len(self._lines)
+            return value
+
+        def close(self):
+            return None
 
     class _FakeServerProc:
         def __init__(self, argv, cwd=None, shell=False, stdout=None, stderr=None,

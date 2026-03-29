@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import urllib.request
 import zipfile
 
@@ -35,19 +36,56 @@ def run_command(
     startupinfo,
     subprocess_module,
     timeout_kill_wait_seconds: float = 5.0,
+    on_output_line=None,
+    stream_output: bool = False,
 ):
     proc = None
     try:
         with open(stdout_path, "w", encoding="utf-8") as stdout_handle:
+            if not stream_output:
+                proc = subprocess_module.Popen(
+                    list(argv),
+                    cwd=cwd,
+                    shell=False,
+                    stdout=stdout_handle,
+                    stderr=subprocess_module.STDOUT,
+                    startupinfo=startupinfo,
+                )
+                proc.communicate(timeout=timeout_seconds)
+                return int(proc.returncode)
             proc = subprocess_module.Popen(
                 list(argv),
                 cwd=cwd,
                 shell=False,
-                stdout=stdout_handle,
+                stdout=subprocess_module.PIPE,
                 stderr=subprocess_module.STDOUT,
                 startupinfo=startupinfo,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
             )
-            proc.communicate(timeout=timeout_seconds)
+            deadline = time.monotonic() + float(timeout_seconds)
+            while True:
+                if time.monotonic() >= deadline:
+                    raise subprocess_module.TimeoutExpired(list(argv), timeout_seconds)
+                line = proc.stdout.readline()
+                if line:
+                    stdout_handle.write(line)
+                    stdout_handle.flush()
+                    if callable(on_output_line):
+                        on_output_line(line.rstrip("\r\n"))
+                    continue
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+            remainder = proc.stdout.read() if proc.stdout is not None else ""
+            if remainder:
+                stdout_handle.write(remainder)
+                stdout_handle.flush()
+                if callable(on_output_line):
+                    for raw_line in str(remainder).splitlines():
+                        on_output_line(raw_line)
         return int(proc.returncode)
     except subprocess_module.TimeoutExpired:
         if proc is not None:
@@ -56,6 +94,10 @@ def run_command(
             with contextlib.suppress(Exception):
                 proc.wait(timeout=timeout_kill_wait_seconds)
         raise
+    finally:
+        if proc is not None and getattr(proc, "stdout", None) is not None:
+            with contextlib.suppress(Exception):
+                proc.stdout.close()
 
 
 def _read_text_file(path: str) -> str:

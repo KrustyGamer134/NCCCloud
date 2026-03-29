@@ -19,6 +19,7 @@ _STEAMCMD_INSTALL_FATAL_MARKERS = (
     "No subscription",
     "Invalid platform",
 )
+_STEAMCMD_PROGRESS_ARTIFACT_NAME = "steamcmd_live_progress.json"
 
 
 def extract_steamcmd_target_version(text: str) -> Optional[str]:
@@ -122,15 +123,65 @@ def run_steamcmd_app_install(
     startupinfo,
     subprocess_module,
 ) -> dict:
+    import re
+
     errors: List[str] = []
     warnings: List[str] = []
 
     log_path = os.path.join(logs_dir, "install_server.log")
     steamcmd_log_path = os.path.join(logs_dir, "steamcmd_install.log")
     progress_metadata_path = os.path.join(logs_dir, steamcmd_progress_metadata_name)
+    progress_artifact_path = os.path.join(logs_dir, _STEAMCMD_PROGRESS_ARTIFACT_NAME)
     runscript_path = os.path.join(logs_dir, "steamcmd_install_script.txt")
     steamcmd_native_log_path = steamcmd_native_console_log_path_fn(steamcmd_exe)
     steamcmd_native_log_offset = file_size_or_zero_fn(steamcmd_native_log_path)
+
+    def _write_progress_artifact(data: dict) -> None:
+        payload = {
+            "instance_id": str(instance_id),
+            "source": "installer_live_stream",
+            **dict(data or {}),
+        }
+        write_json_file_fn(progress_artifact_path, payload)
+
+    def _handle_progress_line(raw_line: str) -> None:
+        line = str(raw_line or "").strip()
+        if not line:
+            return
+        match = re.search(
+            r"Update state \((0x[0-9a-fA-F]+)\)\s+([^,]+),\s+progress:\s+([0-9]+(?:\.[0-9]+)?)\s+\(([0-9]+)\s*/\s*([0-9]+)\)",
+            line,
+        )
+        if match:
+            phase_text = str(match.group(2) or "").strip().lower()
+            if "verifying" in phase_text or "validate" in phase_text:
+                phase = "validating"
+            elif "downloading" in phase_text:
+                phase = "downloading"
+            else:
+                phase = phase_text or None
+            _write_progress_artifact(
+                {
+                    "state": "running",
+                    "phase": phase,
+                    "percent": float(match.group(3)),
+                    "current_bytes": int(match.group(4)),
+                    "total_bytes": int(match.group(5)),
+                    "completed": False,
+                    "raw_line": line,
+                }
+            )
+            return
+        lowered = line.lower()
+        if "fully installed" in lowered or "success! app" in lowered:
+            _write_progress_artifact(
+                {
+                    "state": "completed",
+                    "phase": "completed",
+                    "completed": True,
+                    "raw_line": line,
+                }
+            )
 
     write_text_file_fn(
         runscript_path,
@@ -152,6 +203,16 @@ def run_steamcmd_app_install(
             "source": "steamcmd_native_console_log",
             "start_offset": int(steamcmd_native_log_offset),
         },
+    )
+    _write_progress_artifact(
+        {
+            "state": "running",
+            "phase": None,
+            "percent": None,
+            "current_bytes": None,
+            "total_bytes": None,
+            "completed": False,
+        }
     )
 
     argv = [steamcmd_exe, "+runscript", runscript_path]
@@ -189,6 +250,8 @@ def run_steamcmd_app_install(
                 timeout_seconds=install_server_timeout_seconds,
                 startupinfo=startupinfo,
                 subprocess_module=subprocess_module,
+                on_output_line=_handle_progress_line,
+                stream_output=True,
             )
             fatal_message = _steamcmd_install_failure_message(steamcmd_log_path)
             with open(log_path, "a", encoding="utf-8") as log_handle:
@@ -207,12 +270,14 @@ def run_steamcmd_app_install(
             break
 
         if fatal_message:
+            _write_progress_artifact({"state": "failed", "completed": False, "error": fatal_message})
             errors.append(f"SteamCMD install failed: {fatal_message}")
             return {"ok": False, "details": "install_server failed (steamcmd fatal).", "warnings": warnings, "errors": errors}
 
         if returncode != 0:
             _tail_found, _tail_lines_list = tail_file_lines_fn(steamcmd_log_path, install_server_log_tail_lines)
             tail = "\n".join(_tail_lines_list)
+            _write_progress_artifact({"state": "failed", "completed": False, "error": f"SteamCMD failed with exit code {returncode}."})
             errors.append(f"SteamCMD failed with exit code {returncode}.")
             errors.append("steamcmd_install.log tail:\n" + tail)
             return {"ok": False, "details": "install_server failed (steamcmd non-zero).", "warnings": warnings, "errors": errors}
@@ -222,6 +287,7 @@ def run_steamcmd_app_install(
             log_handle.write(f"timeout_seconds={install_server_timeout_seconds}\nresult=timeout\n")
         with open(steamcmd_log_path, "a", encoding="utf-8") as steamcmd_log_handle:
             steamcmd_log_handle.write(f"\ntimeout_seconds={install_server_timeout_seconds}\n")
+        _write_progress_artifact({"state": "failed", "completed": False, "error": f"SteamCMD timed out after {install_server_timeout_seconds} seconds."})
         errors.append(f"SteamCMD timed out after {install_server_timeout_seconds} seconds.")
         return {"ok": False, "details": "install_server failed (timeout).", "warnings": warnings, "errors": errors}
 
@@ -230,9 +296,11 @@ def run_steamcmd_app_install(
             log_handle.write(f"result=error: {e}\n")
         with open(steamcmd_log_path, "a", encoding="utf-8") as steamcmd_log_handle:
             steamcmd_log_handle.write(f"\nresult=error: {e}\n")
+        _write_progress_artifact({"state": "failed", "completed": False, "error": str(e)})
         errors.append(f"SteamCMD execution error: {e}")
         return {"ok": False, "details": "install_server failed (exception).", "warnings": warnings, "errors": errors}
 
+    _write_progress_artifact({"state": "completed", "phase": "completed", "completed": True})
     return {"ok": True, "details": "steamcmd install complete.", "warnings": warnings, "errors": errors}
 
 

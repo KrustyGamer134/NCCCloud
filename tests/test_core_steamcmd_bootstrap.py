@@ -30,6 +30,7 @@ class _Response:
 
 class _SubprocessSuccess:
     STDOUT = object()
+    PIPE = object()
 
     class TimeoutExpired(Exception):
         pass
@@ -48,16 +49,55 @@ class _SubprocessSuccess:
         self._stdout_text = str(stdout_text)
 
     class _Proc:
-        def __init__(self, *, returncode: int):
+        class _Stdout:
+            def __init__(self, text: str):
+                self._lines = [line + "\n" for line in str(text or "").splitlines()]
+                self._index = 0
+
+            def readline(self):
+                if self._index >= len(self._lines):
+                    return ""
+                value = self._lines[self._index]
+                self._index += 1
+                return value
+
+            def read(self):
+                if self._index >= len(self._lines):
+                    return ""
+                value = "".join(self._lines[self._index :])
+                self._index = len(self._lines)
+                return value
+
+            def close(self):
+                return None
+
+        def __init__(self, *, returncode: int, stdout_text: str, stdout_handle=None):
             self.returncode = int(returncode)
+            self.stdout = self._Stdout(stdout_text)
+            self._stdout_handle = stdout_handle
+            self._stdout_text = stdout_text
+
+        def poll(self):
+            if self.stdout._index >= len(self.stdout._lines):
+                return self.returncode
+            return None
 
         def communicate(self, timeout=None):
+            if self._stdout_handle is not None and self._stdout_text:
+                self._stdout_handle.write(self._stdout_text)
+                self._stdout_handle.flush()
+            self.stdout._index = len(self.stdout._lines)
             return ("", "")
 
-    def Popen(self, argv, cwd=None, shell=False, stdout=None, stderr=None, startupinfo=None):
-        if stdout is not None and self._stdout_text:
-            stdout.write(self._stdout_text)
-            stdout.flush()
+        def wait(self, timeout=None):
+            self.stdout._index = len(self.stdout._lines)
+            return self.returncode
+
+        def kill(self):
+            self.stdout._index = len(self.stdout._lines)
+            return None
+
+    def Popen(self, argv, cwd=None, shell=False, stdout=None, stderr=None, startupinfo=None, **kwargs):
         self.calls.append(
             {
                 "argv": list(argv),
@@ -66,9 +106,10 @@ class _SubprocessSuccess:
                 "stdout": stdout,
                 "stderr": stderr,
                 "startupinfo": startupinfo,
+                "kwargs": kwargs,
             }
         )
-        return self._Proc(returncode=self._returncode)
+        return self._Proc(returncode=self._returncode, stdout_text=self._stdout_text, stdout_handle=stdout)
 
 
 def test_install_windows_bootstrap_requires_root():

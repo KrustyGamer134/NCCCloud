@@ -1282,6 +1282,7 @@ class AdminAPI:
         install_log_path = logs_path / "install_server.log"
         steamcmd_log_path = logs_path / "steamcmd_install.log"
         progress_metadata_path = logs_path / "steamcmd_progress_source.json"
+        progress_artifact_path = logs_path / "steamcmd_live_progress.json"
 
         def _master_logs_paths():
             cluster_root = str(getattr(self._orchestrator, "_cluster_root", "") or "").strip()
@@ -1316,6 +1317,7 @@ class AdminAPI:
                 "install_log_path": root / "install_server.log",
                 "steamcmd_log_path": root / "steamcmd_install.log",
                 "progress_metadata_path": root / "steamcmd_progress_source.json",
+                "progress_artifact_path": root / "steamcmd_live_progress.json",
             }
 
         def _instance_install_status_text():
@@ -1388,6 +1390,7 @@ class AdminAPI:
             return recovered or None
 
         metadata = None
+        live_progress = None
         if progress_metadata_path.exists() and progress_metadata_path.is_file():
             try:
                 raw = json.loads(progress_metadata_path.read_text(encoding="utf-8-sig"))
@@ -1402,7 +1405,9 @@ class AdminAPI:
             if master_paths:
                 master_install_found, master_install_tail = _tail(master_paths["install_log_path"])
                 master_metadata = None
+                master_live_progress = None
                 master_progress_metadata_path = master_paths["progress_metadata_path"]
+                master_progress_artifact_path = master_paths["progress_artifact_path"]
                 if master_progress_metadata_path.exists() and master_progress_metadata_path.is_file():
                     try:
                         raw = json.loads(master_progress_metadata_path.read_text(encoding="utf-8-sig"))
@@ -1410,14 +1415,30 @@ class AdminAPI:
                             master_metadata = raw
                     except Exception:
                         master_metadata = None
-                if master_install_found or master_metadata is not None:
+                if master_progress_artifact_path.exists() and master_progress_artifact_path.is_file():
+                    try:
+                        raw = json.loads(master_progress_artifact_path.read_text(encoding="utf-8-sig"))
+                        if isinstance(raw, dict):
+                            master_live_progress = raw
+                    except Exception:
+                        master_live_progress = None
+                if master_install_found or master_metadata is not None or master_live_progress is not None:
                     logs_path = master_paths["logs_path"]
                     install_log_path = master_paths["install_log_path"]
                     steamcmd_log_path = master_paths["steamcmd_log_path"]
                     progress_metadata_path = master_progress_metadata_path
+                    progress_artifact_path = master_progress_artifact_path
                     install_found = master_install_found
                     install_tail = master_install_tail
                     metadata = master_metadata
+                    live_progress = master_live_progress
+        if live_progress is None and progress_artifact_path.exists() and progress_artifact_path.is_file():
+            try:
+                raw = json.loads(progress_artifact_path.read_text(encoding="utf-8-sig"))
+                if isinstance(raw, dict):
+                    live_progress = raw
+            except Exception:
+                live_progress = None
         if not isinstance(metadata, dict):
             metadata = _recover_progress_metadata_from_install_log(install_log_path)
         elif not str(metadata.get("log_path") or "").strip():
@@ -1481,9 +1502,19 @@ class AdminAPI:
             }
 
         steamcmd_progress = _parse_steamcmd_progress(steamcmd_tail)
+        if isinstance(live_progress, dict):
+            steamcmd_progress = {
+                "phase": live_progress.get("phase"),
+                "percent": live_progress.get("percent"),
+                "current_bytes": live_progress.get("current_bytes"),
+                "total_bytes": live_progress.get("total_bytes"),
+                "completed": bool(live_progress.get("completed")),
+            }
 
         progress_state = "not_started"
-        if metadata is not None or install_found or steamcmd_found:
+        if isinstance(live_progress, dict) and str(live_progress.get("state") or "").strip():
+            progress_state = str(live_progress.get("state") or "").strip().lower()
+        elif metadata is not None or install_found or steamcmd_found:
             progress_state = "running"
         if steamcmd_progress.get("phase") == "validating":
             progress_state = "validating"
@@ -1506,8 +1537,10 @@ class AdminAPI:
                     "steamcmd_log": str(steamcmd_log_path),
                     "steamcmd_progress_source_log": str(steamcmd_source_path),
                     "progress_metadata": str(progress_metadata_path),
+                    "live_progress": str(progress_artifact_path),
                 },
                 "progress_metadata": metadata,
+                "live_progress": live_progress,
                 "steamcmd_progress": steamcmd_progress,
                 "install_log_found": install_found,
                 "install_log_tail": install_tail,
@@ -1909,7 +1942,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 
