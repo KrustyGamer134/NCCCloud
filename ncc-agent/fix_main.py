@@ -55,7 +55,7 @@ async def main():
     conn = AgentConnection(settings, admin_api)
     await asyncio.gather(
         conn.connect_loop(),
-        run_status_reporter(agent_id, admin_api, lambda: conn.ws),
+        run_status_reporter(agent_id, admin_api, conn.send_json, conn.is_connected),
     )
 
 

@@ -39,6 +39,7 @@ class AgentConnection:
         self._settings = settings
         self._admin_api = admin_api
         self._ws = None
+        self._send_lock = asyncio.Lock()
         # Public IP is fetched once when connect_loop() starts and reused on
         # every subsequent reconnect.  A fresh process restart re-fetches it.
         self._public_ip: str | None = None
@@ -51,6 +52,19 @@ class AgentConnection:
     def ws(self):
         """Return the current live WebSocket, or None if disconnected."""
         return self._ws
+
+    def is_connected(self) -> bool:
+        return self._ws is not None
+
+    async def send_json(self, payload: dict) -> None:
+        ws = self._ws
+        if ws is None:
+            raise ConnectionError("No active websocket connection")
+
+        async with self._send_lock:
+            if ws is not self._ws or self._ws is None:
+                raise ConnectionError("Websocket connection changed during send")
+            await ws.send(json.dumps(payload))
 
     async def connect_loop(self) -> None:
         """
@@ -163,14 +177,14 @@ class AgentConnection:
             msg_type = msg.get("type", "")
 
             if msg_type == "command":
-                await dispatch_command(msg, self._admin_api, ws)
+                await dispatch_command(msg, self._admin_api, self.send_json)
             else:
                 logger.debug("Ignoring unhandled message type: %r", msg_type)
 
     async def _send_heartbeat(self, ws) -> None:
         heartbeat = {"type": "heartbeat", "agent_id": self._settings.agent_id}
         try:
-            await ws.send(json.dumps(heartbeat))
+            await self.send_json(heartbeat)
             logger.debug("Heartbeat sent")
         except Exception as exc:
             logger.warning("Failed to send heartbeat: %s", exc)

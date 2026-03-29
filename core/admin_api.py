@@ -1260,6 +1260,40 @@ class AdminAPI:
             tail = lines[-n:] if len(lines) > n else lines
             return True, tail
 
+        def _recover_progress_metadata_from_install_log(path: Path):
+            if not path.exists() or not path.is_file():
+                return None
+            try:
+                with path.open("r", encoding="utf-8", errors="replace") as handle:
+                    header_lines = []
+                    for _ in range(32):
+                        line = handle.readline()
+                        if not line:
+                            break
+                        header_lines.append(line.rstrip("\r\n"))
+            except Exception:
+                return None
+
+            recovered = {}
+            for raw_line in header_lines:
+                line = str(raw_line or "").strip()
+                if not line or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip().lower()
+                value = value.strip()
+                if key == "instance_id" and value:
+                    recovered["instance_id"] = value
+                elif key == "steamcmd_native_log" and value:
+                    recovered["log_path"] = value
+                    recovered["source"] = "steamcmd_native_console_log"
+                elif key == "steamcmd_native_log_offset":
+                    try:
+                        recovered["start_offset"] = max(0, int(value))
+                    except Exception:
+                        continue
+            return recovered or None
+
         metadata = None
         if progress_metadata_path.exists() and progress_metadata_path.is_file():
             try:
@@ -1270,6 +1304,15 @@ class AdminAPI:
                 metadata = None
 
         install_found, install_tail = _tail(install_log_path)
+        if not isinstance(metadata, dict):
+            metadata = _recover_progress_metadata_from_install_log(install_log_path)
+        elif not str(metadata.get("log_path") or "").strip():
+            recovered_metadata = _recover_progress_metadata_from_install_log(install_log_path) or {}
+            if recovered_metadata:
+                metadata = {
+                    **recovered_metadata,
+                    **metadata,
+                }
         steamcmd_found = False
         steamcmd_tail = []
         steamcmd_source_path = steamcmd_log_path
@@ -1752,7 +1795,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

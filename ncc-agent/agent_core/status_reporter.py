@@ -10,7 +10,6 @@ transient AdminAPI or network error cannot kill the agent process.
 """
 
 import asyncio
-import json
 import logging
 from typing import Callable
 
@@ -22,7 +21,8 @@ STATUS_INTERVAL: int = 15  # seconds between status pushes
 async def run_status_reporter(
     agent_id: str,
     admin_api,
-    get_websocket_fn: Callable,
+    send_json_fn: Callable,
+    is_connected_fn: Callable,
 ) -> None:
     """
     Continuously send status snapshots to the backend.
@@ -33,36 +33,35 @@ async def run_status_reporter(
         The registered agent identifier, included in every status message.
     admin_api:
         Live AdminAPI instance used to query the local cluster state.
-    get_websocket_fn:
-        Zero-argument callable that returns the current open WebSocket, or
-        None when the agent is between reconnection attempts.
+    send_json_fn:
+        Async callable used to send frames over the current live WebSocket.
+    is_connected_fn:
+        Zero-argument callable that returns True when the agent currently has a
+        live WebSocket connection.
     """
     logger.info("Status reporter started (interval=%ds)", STATUS_INTERVAL)
 
     while True:
         await asyncio.sleep(STATUS_INTERVAL)
 
+        if not is_connected_fn():
+            logger.debug("Status reporter: no active connection, skipping snapshot")
+            continue
+
         try:
-            snapshot = _get_snapshot(admin_api)
+            snapshot = await asyncio.to_thread(_get_snapshot, admin_api)
         except Exception as exc:
             logger.warning("Status reporter: failed to collect snapshot: %s", exc)
             continue
 
-        message = json.dumps(
-            {
-                "type": "status_update",
-                "agent_id": agent_id,
-                "data": snapshot,
-            }
-        )
-
-        ws = get_websocket_fn()
-        if ws is None:
-            logger.debug("Status reporter: no active connection, skipping push")
-            continue
-
         try:
-            await ws.send(message)
+            await send_json_fn(
+                {
+                    "type": "status_update",
+                    "agent_id": agent_id,
+                    "data": snapshot,
+                }
+            )
             logger.debug("Status reporter: snapshot sent")
         except Exception as exc:
             logger.warning("Status reporter: failed to send snapshot: %s", exc)

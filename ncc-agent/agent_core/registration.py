@@ -70,7 +70,10 @@ async def ensure_registered(settings) -> tuple[str, str]:
         raise ValueError("TENANT_ID must be set for agent self-registration")
 
     url = f"{settings.backend_http_url}/agents/register"
-    headers = {"Authorization": f"Bearer {settings.api_key}"}
+    bootstrap_key = settings.bootstrap_api_key or settings.api_key
+    if not bootstrap_key:
+        raise ValueError("BOOTSTRAP_API_KEY must be set for agent self-registration")
+    headers = {"Authorization": f"Bearer {bootstrap_key}"}
     body = {"machine_name": socket.gethostname(), "tenant_id": settings.tenant_id}
 
     try:

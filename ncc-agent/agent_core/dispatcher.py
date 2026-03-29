@@ -45,7 +45,7 @@ def _build_result(command_id: str, status: str, data) -> dict:
     }
 
 
-async def dispatch_command(msg: dict, admin_api, websocket) -> None:
+async def dispatch_command(msg: dict, admin_api, send_json_fn) -> None:
     """
     Parse *msg*, call the appropriate AdminAPI method, and send the result
     envelope back over *websocket*.
@@ -87,19 +87,17 @@ async def dispatch_command(msg: dict, admin_api, websocket) -> None:
             )
 
     try:
-        if action == "install_server":
-            # SteamCMD installs are long-running and must not block the async
-            # websocket loop, or the backend marks the agent offline.
-            result_data = await asyncio.to_thread(
-                _route,
-                action,
-                plugin_name,
-                instance_id,
-                payload,
-                admin_api,
-            )
-        else:
-            result_data = _route(action, plugin_name, instance_id, payload, admin_api)
+        # AdminAPI routes are synchronous and may perform disk/process work.
+        # Keep them off the websocket event loop so protocol pings and status
+        # sends can continue while commands are in flight.
+        result_data = await asyncio.to_thread(
+            _route,
+            action,
+            plugin_name,
+            instance_id,
+            payload,
+            admin_api,
+        )
         envelope = _build_result(command_id, "success", result_data)
     except Exception as exc:
         logger.exception(
@@ -111,7 +109,7 @@ async def dispatch_command(msg: dict, admin_api, websocket) -> None:
         envelope = _build_result(command_id, "error", {"message": str(exc)})
 
     try:
-        await websocket.send(json.dumps(envelope))
+        await send_json_fn(envelope)
     except Exception as send_exc:
         logger.error(
             "Failed to send command result for command_id=%s: %s",
