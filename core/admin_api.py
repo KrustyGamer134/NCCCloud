@@ -1502,7 +1502,11 @@ class AdminAPI:
             }
 
         steamcmd_progress = _parse_steamcmd_progress(steamcmd_tail)
-        if isinstance(live_progress, dict):
+        if isinstance(live_progress, dict) and (
+            live_progress.get("percent") is not None
+            or str(live_progress.get("phase") or "").strip()
+            or bool(live_progress.get("completed"))
+        ):
             steamcmd_progress = {
                 "phase": live_progress.get("phase"),
                 "percent": live_progress.get("percent"),
@@ -1942,7 +1946,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

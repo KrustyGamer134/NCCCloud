@@ -356,6 +356,63 @@ def test_get_install_progress_parses_timestamped_steamcmd_lines(tmp_path):
     assert response["data"]["steamcmd_progress"]["percent"] == 22.78
 
 
+def test_get_install_progress_keeps_parsed_progress_when_live_artifact_has_null_fields(tmp_path):
+    plugin_name = "ark"
+    instance_id = "17"
+    install_root = tmp_path / "GameServers" / "ArkSA" / "TheIsland_WP"
+    logs_dir = install_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    plugin_defaults = tmp_path / "plugins" / plugin_name
+    plugin_defaults.mkdir(parents=True, exist_ok=True)
+    (plugin_defaults / "plugin_defaults.json").write_text(
+        json.dumps({"schema_version": 1, "mods": [], "passive_mods": []}),
+        encoding="utf-8",
+    )
+
+    instance_config_dir = tmp_path / "plugins" / plugin_name / "instances" / instance_id / "config"
+    instance_config_dir.mkdir(parents=True, exist_ok=True)
+    (instance_config_dir / "instance_config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "map": "TheIsland_WP",
+                "install_root": str(install_root),
+                "mods": [],
+                "passive_mods": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    (logs_dir / "steamcmd_install.log").write_text(
+        "[2026-03-29 16:41:09]  Update state (0x61) downloading, progress: 23.00 (3012116455 / 13098662534)\n",
+        encoding="utf-8",
+    )
+    (logs_dir / "steamcmd_live_progress.json").write_text(
+        json.dumps(
+            {
+                "instance_id": instance_id,
+                "source": "installer_live_stream",
+                "state": "running",
+                "phase": None,
+                "percent": None,
+                "current_bytes": None,
+                "total_bytes": None,
+                "completed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    api = AdminAPI(_StubOrchestrator(tmp_path))
+    response = api.get_install_progress(plugin_name, instance_id, last_lines=50)
+
+    assert response["status"] == "success"
+    assert response["data"]["steamcmd_progress"]["phase"] == "downloading"
+    assert response["data"]["steamcmd_progress"]["percent"] == 23.00
+
+
 def test_get_log_tail_falls_back_to_master_logs_while_installing(tmp_path):
     plugin_name = "ark"
     instance_id = "14"
