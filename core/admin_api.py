@@ -1203,6 +1203,7 @@ class AdminAPI:
     def get_install_progress(self, plugin_name, instance_id, last_lines=50):
         from pathlib import Path
         import json
+        import re
 
         resolved = self._resolve_instance_path_context(plugin_name, instance_id)
         if not isinstance(resolved, dict) or resolved.get("status") != "success":
@@ -1255,10 +1256,53 @@ class AdminAPI:
         install_found, install_tail = _tail(install_log_path)
         steamcmd_found, steamcmd_tail = _tail(steamcmd_log_path)
 
+        def _parse_steamcmd_progress(lines):
+            phase = None
+            percent = None
+            current = None
+            total = None
+            completed = False
+            for raw_line in lines:
+                line = str(raw_line or "").strip()
+                if not line:
+                    continue
+                lowered = line.lower()
+                match = re.search(
+                    r"Update state \((0x[0-9a-fA-F]+)\)\s+([^,]+),\s+progress:\s+([0-9]+(?:\.[0-9]+)?)\s+\(([0-9]+)\s*/\s*([0-9]+)\)",
+                    line,
+                )
+                if match:
+                    phase_text = str(match.group(2) or "").strip().lower()
+                    if "verifying" in phase_text or "validate" in phase_text:
+                        phase = "validating"
+                    elif "downloading" in phase_text:
+                        phase = "downloading"
+                    else:
+                        phase = phase_text or phase
+                    percent = float(match.group(3))
+                    current = int(match.group(4))
+                    total = int(match.group(5))
+                    continue
+                if "fully installed" in lowered or "success! app" in lowered:
+                    completed = True
+            return {
+                "phase": phase,
+                "percent": percent,
+                "current_bytes": current,
+                "total_bytes": total,
+                "completed": completed,
+            }
+
+        steamcmd_progress = _parse_steamcmd_progress(steamcmd_tail)
+
         progress_state = "not_started"
         if metadata is not None or install_found or steamcmd_found:
             progress_state = "running"
+        if steamcmd_progress.get("phase") == "validating":
+            progress_state = "validating"
         if install_tail and any("steamcmd install complete" in str(line).lower() for line in install_tail):
+            progress_state = "completed"
+        if steamcmd_progress.get("completed"):
             progress_state = "completed"
         if install_tail and any("failed" in str(line).lower() or "timeout" in str(line).lower() for line in install_tail):
             progress_state = "failed"
@@ -1276,6 +1320,7 @@ class AdminAPI:
                     "progress_metadata": str(progress_metadata_path),
                 },
                 "progress_metadata": metadata,
+                "steamcmd_progress": steamcmd_progress,
                 "install_log_found": install_found,
                 "install_log_tail": install_tail,
                 "steamcmd_log_found": steamcmd_found,
@@ -1676,7 +1721,6 @@ class AdminAPI:
             plugin_name=str(plugin_name),
             instance_id=str(instance_id),
         )
-
 
 
 

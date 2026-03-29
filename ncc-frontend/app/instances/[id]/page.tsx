@@ -88,6 +88,12 @@ function recentProgressLine(lines: string[]) {
   return "";
 }
 
+function formatPercent(value: unknown) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return `${numeric.toFixed(2)}%`;
+}
+
 function resolveLogLines(primary: string[] | undefined, fallback: string[] | undefined) {
   return Array.isArray(primary) && primary.length > 0 ? primary : Array.isArray(fallback) ? fallback : [];
 }
@@ -113,6 +119,42 @@ function deriveValidateProgress(lines: string[], metadata: Record<string, unknow
     return { status: "done" as const, detail: recentProgressLine(lines) || "SteamCMD validation completed." };
   }
   return { status: "idle" as const, detail: "Validation has not started yet." };
+}
+
+function deriveSteamcmdProgress(progress: unknown, lines: string[]) {
+  const data = progress && typeof progress === "object" ? (progress as Record<string, unknown>) : {};
+  const phase = String(data.phase ?? "").toLowerCase();
+  const percentLabel = formatPercent(data.percent);
+  const latestLine = recentProgressLine(lines);
+
+  if (phase === "downloading") {
+    return {
+      installStatus: "active" as const,
+      installDetail: percentLabel ? `Downloading server files: ${percentLabel}` : latestLine || "Downloading server files.",
+      validateStatus: "idle" as const,
+      validateDetail: "Validation has not started yet.",
+    };
+  }
+
+  if (phase === "validating") {
+    return {
+      installStatus: "done" as const,
+      installDetail: "Server files finished downloading.",
+      validateStatus: "active" as const,
+      validateDetail: percentLabel ? `Validating installed files: ${percentLabel}` : latestLine || "SteamCMD validation is running.",
+    };
+  }
+
+  if (Boolean(data.completed)) {
+    return {
+      installStatus: "done" as const,
+      installDetail: "Server files finished downloading.",
+      validateStatus: "done" as const,
+      validateDetail: "SteamCMD validation completed.",
+    };
+  }
+
+  return null;
 }
 
 function deriveDetailView(args: {
@@ -316,6 +358,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   );
   const runtimeLogLines = resolveLogLines(detail?.logs.server?.data?.lines, []);
   const progressMetadata = detail?.install_progress?.data?.progress_metadata;
+  const steamcmdProgress = detail?.install_progress?.data?.steamcmd_progress;
   const configuredMap = String(detail?.instance.config_json?.map ?? "unset");
   const agentOnline = Boolean(detail?.instance.agent_online);
   const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
@@ -356,13 +399,19 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
     : "No active install or lifecycle transition is reported by the backend.";
   const latestInstallLine = recentProgressLine(installLogLines);
   const latestSteamcmdLine = recentProgressLine(steamcmdLogLines);
+  const parsedSteamcmdProgress = deriveSteamcmdProgress(steamcmdProgress, steamcmdLogLines);
   const installStepStatus =
-    view.failed ? "error" : view.installActive ? "active" : view.installed ? "done" : "idle";
+    parsedSteamcmdProgress?.installStatus ??
+    (view.failed ? "error" : view.installActive ? "active" : view.installed ? "done" : "idle");
   const installStepDetail =
+    parsedSteamcmdProgress?.installDetail ??
     latestInstallLine ||
     latestSteamcmdLine ||
     (view.installActive ? "Waiting for host install output." : view.installed ? "Server files are present on the host." : "Install has not started yet.");
-  const validateStep = deriveValidateProgress(steamcmdLogLines, progressMetadata);
+  const validateStep =
+    parsedSteamcmdProgress
+      ? { status: parsedSteamcmdProgress.validateStatus, detail: parsedSteamcmdProgress.validateDetail }
+      : deriveValidateProgress(steamcmdLogLines, progressMetadata);
 
   useEffect(() => {
     if (!instanceId || !shouldAutoRefresh) return;
