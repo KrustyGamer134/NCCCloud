@@ -114,3 +114,6 @@ Follow these as authoritative:
 - `new_contracts/orchestrator/ORCHESTRATOR_LIFECYCLE_CONTRACT_v2.md`
 - `new_contracts/backend/BACKEND_PUBLIC_API_CONTRACT_v1.md`
 - `new_contracts/game_system/GAME_DEFINITION_SCHEMA_CONTRACT_v1.md`
+- `new_contracts/shared/HOST_LOCAL_SETTINGS_OWNERSHIP_CONTRACT_v1.md`
+- `new_contracts/shared/HOST_STORAGE_LAYOUT_CONTRACT_v1.md`
+- `new_contracts/shared/SHARED_MASTER_INSTALL_CONTRACT_v1.md`

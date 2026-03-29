@@ -53,4 +53,4 @@ Game definitions should describe what the system needs to install, configure, la
 - game definitions must not encode product-level lifecycle policy
 - for managed installs, the app-level game root is the filesystem base and any plugin-level install folder value must be treated as a relative folder name under that root, not as a replacement absolute path
 - managed instance installs should resolve beneath the plugin folder root using deterministic map-based sequencing such as `<gameservers_root>/<plugin_folder>/<map>_<n>`
-- plugin-owned metadata and instance config should resolve beneath `<gameservers_root>/<plugin_folder>/plugin/`
+- host-owned control metadata, local settings, and shared masters must resolve beneath the host control root defined by the host storage layout contract, not inside cloud-owned persistence

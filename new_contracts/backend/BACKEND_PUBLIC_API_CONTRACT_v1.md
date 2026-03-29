@@ -35,6 +35,13 @@ These may route through approved backend/game-system/agent boundaries:
 - non-lifecycle game actions
 - log/event reads
 - game catalog reads
+- host-owned settings reads and writes
+
+### 2.3 Settings authority boundary
+
+- Backend may remain authoritative for cloud-owned product settings.
+- Backend may authorize and relay host-owned operational settings, but must not silently redefine itself as the durable authority for those host-owned settings.
+- Host-owned operational settings must route through the approved host execution boundary when the host is the authoritative owner.
 
 ## 3) Response Rules
 

@@ -12,6 +12,8 @@ Purpose: Defines persistence expectations shared across backend, orchestrator, g
 
 ## 2) Categories
 
+- cloud-owned product settings
+- host-owned operational settings
 - game definition records
 - per-instance configuration
 - lifecycle metadata
@@ -22,3 +24,4 @@ Purpose: Defines persistence expectations shared across backend, orchestrator, g
 
 - Unknown persisted fields should be handled conservatively according to owning schema rules.
 - Breaking persistence changes require a versioned contract update.
+- Cloud-owned and host-owned settings must remain distinguishable concerns even when request/response payloads are relayed through the same API surface.

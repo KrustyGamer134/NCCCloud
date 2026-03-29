@@ -33,3 +33,5 @@ Frontend may submit:
 - backend is authoritative for routing and validation
 - frontend must not encode backend lifecycle rules
 - frontend must not synthesize missing backend responses
+- frontend may edit cloud-owned or host-owned settings only through backend API
+- frontend must not assume that backend DB storage is the authoritative persistence layer for host-owned operational settings

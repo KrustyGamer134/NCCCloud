@@ -58,6 +58,7 @@ Rules:
 - route non-lifecycle game actions through approved backend/game-system/agent boundaries
 - compose snapshots
 - deliver events to clients
+- own cloud-side product settings only
 
 ### 3.3 Orchestrator ownership
 
@@ -81,6 +82,7 @@ Rules:
 - runtime inspection and reporting
 - local filesystem interaction
 - machine-local dependency and install work delegated by backend/orchestrator
+- host-owned operational settings persistence and host-local control data
 
 ## 4) Permanent Invariants
 
@@ -91,6 +93,7 @@ Rules:
 - Game System must not own lifecycle legality.
 - Shared contracts must define stable payloads for snapshots, events, actions, persistence, and errors.
 - New games should be added through Game System definitions where practical, not through product-wide architectural forks.
+- Cloud-owned product settings and host-owned operational settings must remain explicitly separated.
 
 ## 5) Terminology
 
