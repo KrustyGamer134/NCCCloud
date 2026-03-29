@@ -2233,6 +2233,13 @@ class Orchestrator:
                 },
             }
 
+        instance_layout_fields = self._load_instance_layout_fields(plugin_name, instance_id)
+        planned_layout = self._resolve_instance_install_layout(plugin_name, instance_id)
+        planned_install_root = str((planned_layout or {}).get("install_root") or "").strip()
+        existing_install_root = str((instance_layout_fields or {}).get("install_root") or "").strip()
+        if planned_install_root and not existing_install_root:
+            self._merge_instance_config_fields(plugin_name, instance_id, {"install_root": planned_install_root})
+
         # Single source of truth for install gating.
         write_instance_install_status(cluster_root, plugin_name, instance_id, "INSTALLING")
 
@@ -3808,8 +3815,6 @@ class Orchestrator:
                 "ports": inst.get("ports") or [],
             },
         }
-
-
 
 
 

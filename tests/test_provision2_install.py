@@ -209,6 +209,61 @@ def test_install_server_success_sets_installed_and_start_gate_passes(tmp_path: P
     assert conn.requests[-1][0] == "start"
 
 
+def test_install_server_persists_planned_install_root_before_plugin_call(tmp_path: Path):
+    cluster_root = tmp_path
+    ensure_instance_layout(str(cluster_root), "ark", "10")
+    steamcmd_dir = cluster_root / "steamcmd"
+    steamcmd_dir.mkdir(parents=True, exist_ok=True)
+    (steamcmd_dir / "steamcmd.exe").write_text("stub", encoding="utf-8")
+    (cluster_root / "config").mkdir(parents=True, exist_ok=True)
+    (cluster_root / "config" / "cluster_config.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "cluster_name": "arkSA",
+                "gameservers_root": str(cluster_root / "GameServers"),
+                "steamcmd_root": str(steamcmd_dir),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    config_path = cluster_root / "plugins" / "ark" / "instances" / "10" / "config" / "instance_config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps({"schema_version": 1, "map": "TheIsland_WP"}, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+    conn = FakeConn()
+    reg = FakeRegistry(conn)
+    state = StateManager(state_file=None)
+    orch = Orchestrator(reg, state, cluster_root=str(cluster_root))
+    orch._resolve_instance_install_layout = lambda plugin_name, instance_id: {
+        "install_root": str(cluster_root / "GameServers" / "ArkSA" / "TheIsland_WP_1")
+    }
+
+    observed = {}
+
+    def _fake_send_action(plugin_name, action, payload):
+        current = json.loads(config_path.read_text(encoding="utf-8"))
+        observed["install_root"] = current.get("install_root")
+        return {
+            "status": "error",
+            "data": {"ok": False, "details": "install_server failed", "warnings": [], "errors": ["boom"]},
+        }
+
+    orch.send_action = _fake_send_action
+
+    result = orch.install_server_instance("ark", "10")
+
+    assert result["status"] == "error"
+    assert observed["install_root"] == str(cluster_root / "GameServers" / "ArkSA" / "TheIsland_WP_1")
+    current = json.loads(config_path.read_text(encoding="utf-8"))
+    assert current["install_root"] == str(cluster_root / "GameServers" / "ArkSA" / "TheIsland_WP_1")
+
+
 def test_install_server_failure_sets_failed_and_start_still_refuses(tmp_path: Path):
     cluster_root = tmp_path
     ensure_instance_layout(str(cluster_root), "ark", "10")
