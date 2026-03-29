@@ -368,6 +368,7 @@ async def _read_instance_from_agent(
     request: Request,
     tenant_id: str,
     db: AsyncSession,
+    plugin_json: dict | None = None,
 ) -> dict:
     if inst.agent_id is None:
         raise HTTPException(
@@ -382,11 +383,13 @@ async def _read_instance_from_agent(
             detail={"error": "Agent is not connected", "code": "AGENT_OFFLINE"},
         )
 
-    catalog_result = await db.execute(
-        select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
-    )
-    catalog_row = catalog_result.scalar_one_or_none()
-    plugin_json = catalog_row.plugin_json if catalog_row else {}
+    resolved_plugin_json = plugin_json
+    if resolved_plugin_json is None:
+        catalog_result = await db.execute(
+            select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
+        )
+        catalog_row = catalog_result.scalar_one_or_none()
+        resolved_plugin_json = catalog_row.plugin_json if catalog_row else {}
 
     result = await send_command(
         agent_id=agent_id_str,
@@ -395,7 +398,7 @@ async def _read_instance_from_agent(
             "instance_id": str(inst.instance_id),
             "plugin_name": inst.plugin_id,
             "game_system_id": inst.plugin_id,
-            "plugin_json": plugin_json,
+            "plugin_json": resolved_plugin_json,
             **dict(payload or {}),
         },
     )
@@ -428,6 +431,7 @@ async def _safe_agent_read(
     request: Request,
     tenant_id: str,
     db: AsyncSession,
+    plugin_json: dict | None = None,
 ) -> dict | None:
     if inst.agent_id is None:
         return None
@@ -442,6 +446,7 @@ async def _safe_agent_read(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         )
     except HTTPException:
         return None
@@ -484,9 +489,10 @@ async def get_instance(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
+    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
     inst.config_json = _effective_instance_config(
         dict(inst.config_json or {}),
-        dict(getattr(plugin, "plugin_json", {}) or {}),
+        plugin_json,
     )
     return InstanceResponse.from_orm_safe(inst)
 
@@ -503,9 +509,10 @@ async def get_instance_detail(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
+    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
     inst.config_json = _effective_instance_config(
         dict(inst.config_json or {}),
-        dict(getattr(plugin, "plugin_json", {}) or {}),
+        plugin_json,
     )
     pending_ini_sync_fields = [
         str(item).strip()
@@ -521,6 +528,7 @@ async def get_instance_detail(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         ),
         _safe_agent_read(
             inst=inst,
@@ -529,6 +537,7 @@ async def get_instance_detail(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         ),
         _safe_agent_read(
             inst=inst,
@@ -537,6 +546,7 @@ async def get_instance_detail(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         ),
         _safe_agent_read(
             inst=inst,
@@ -545,6 +555,7 @@ async def get_instance_detail(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         ),
         _safe_agent_read(
             inst=inst,
@@ -553,6 +564,7 @@ async def get_instance_detail(
             request=request,
             tenant_id=tenant_id,
             db=db,
+            plugin_json=plugin_json,
         ),
     )
 
