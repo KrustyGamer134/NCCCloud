@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
@@ -512,45 +513,47 @@ async def get_instance_detail(
         if str(item).strip()
     ]
 
-    status = await _safe_agent_read(
-        inst=inst,
-        command="get-status",
-        payload={},
-        request=request,
-        tenant_id=tenant_id,
-        db=db,
-    )
-    install_progress = await _safe_agent_read(
-        inst=inst,
-        command="get-install-progress",
-        payload={"lines": 50},
-        request=request,
-        tenant_id=tenant_id,
-        db=db,
-    )
-    install_log = await _safe_agent_read(
-        inst=inst,
-        command="fetch-logs",
-        payload={"log_name": "install_server", "lines": 50},
-        request=request,
-        tenant_id=tenant_id,
-        db=db,
-    )
-    steamcmd_log = await _safe_agent_read(
-        inst=inst,
-        command="fetch-logs",
-        payload={"log_name": "steamcmd_install", "lines": 50},
-        request=request,
-        tenant_id=tenant_id,
-        db=db,
-    )
-    runtime_log = await _safe_agent_read(
-        inst=inst,
-        command="fetch-logs",
-        payload={"log_name": "server", "lines": 50},
-        request=request,
-        tenant_id=tenant_id,
-        db=db,
+    status, install_progress, install_log, steamcmd_log, runtime_log = await asyncio.gather(
+        _safe_agent_read(
+            inst=inst,
+            command="get-status",
+            payload={},
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        ),
+        _safe_agent_read(
+            inst=inst,
+            command="get-install-progress",
+            payload={"lines": 50},
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        ),
+        _safe_agent_read(
+            inst=inst,
+            command="fetch-logs",
+            payload={"log_name": "install_server", "lines": 50},
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        ),
+        _safe_agent_read(
+            inst=inst,
+            command="fetch-logs",
+            payload={"log_name": "steamcmd_install", "lines": 50},
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        ),
+        _safe_agent_read(
+            inst=inst,
+            command="fetch-logs",
+            payload={"log_name": "server", "lines": 50},
+            request=request,
+            tenant_id=tenant_id,
+            db=db,
+        ),
     )
 
     return InstanceDetailResponse(

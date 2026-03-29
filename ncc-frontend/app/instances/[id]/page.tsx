@@ -359,8 +359,8 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
   const runtimeLogLines = resolveLogLines(detail?.logs.server?.data?.lines, []);
   const progressMetadata = detail?.install_progress?.data?.progress_metadata;
   const steamcmdProgress = detail?.install_progress?.data?.steamcmd_progress;
-  const configuredMap = String(detail?.instance.config_json?.map ?? "unset");
-  const agentOnline = Boolean(detail?.instance.agent_online);
+  const configuredMap = detail?.instance.config_json?.map != null ? String(detail.instance.config_json.map) : "loading";
+  const agentOnline = detail?.instance.agent_online;
   const pendingConfigFields = detail?.config_apply?.data?.pending_fields ?? [];
   const configRequiresRestart = Boolean(detail?.config_apply?.data?.requires_restart);
   const view = deriveDetailView({
@@ -476,7 +476,7 @@ export default function InstanceDetailPage({ params }: { params: Promise<{ id: s
             {shouldAutoRefresh && (
               <span className="text-xs text-gray-500">Auto-refreshing</span>
             )}
-            {!agentOnline && (
+            {agentOnline === false && (
               <span className="text-xs text-red-400">Agent offline</span>
             )}
             <button
