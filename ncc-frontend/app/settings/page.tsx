@@ -43,7 +43,6 @@ interface AppForm {
   // Cluster config (sent to agent / cluster_config.json)
   gameservers_root: string;
   steamcmd_root: string;
-  cluster_name: string;
   // UI preferences (web-client only)
   auto_refresh_enabled: boolean;
   auto_refresh_interval_seconds: number;
@@ -92,7 +91,6 @@ interface InstanceForm {
 const DEFAULT_APP: AppForm = {
   gameservers_root: "",
   steamcmd_root: "",
-  cluster_name: "arkSA",
   auto_refresh_enabled: true,
   auto_refresh_interval_seconds: 2,
   max_log_lines_shown: 200,
@@ -104,7 +102,6 @@ function appJsonToForm(json: Record<string, unknown>): AppForm {
   return {
     gameservers_root: String(json.gameservers_root ?? ""),
     steamcmd_root: String(json.steamcmd_root ?? ""),
-    cluster_name: String(json.cluster_name ?? "arkSA"),
     auto_refresh_enabled: json.auto_refresh_enabled !== false,
     auto_refresh_interval_seconds: Number(json.auto_refresh_interval_seconds ?? 2),
     max_log_lines_shown: Number(json.max_log_lines_shown ?? 200),
@@ -117,7 +114,6 @@ function formToAppJson(form: AppForm): Record<string, unknown> {
   return {
     gameservers_root: form.gameservers_root.trim(),
     steamcmd_root: form.steamcmd_root.trim(),
-    cluster_name: form.cluster_name.trim() || "arkSA",
     auto_refresh_enabled: form.auto_refresh_enabled,
     auto_refresh_interval_seconds: form.auto_refresh_interval_seconds,
     max_log_lines_shown: Math.max(1, Math.min(2000, form.max_log_lines_shown)),
@@ -554,17 +550,7 @@ function AppSettingsTab({
               placeholder="E:\SteamCMD"
             />
           </FieldRow>
-          <FieldRow
-            label="Cluster Name"
-            hint='Sub-folder name used for cluster data, default "arkSA"'
-          >
-            <TextInput
-              value={form.cluster_name}
-              onChange={(v) => set("cluster_name", v)}
-              placeholder="arkSA"
-            />
-          </FieldRow>
-        </FieldGroup>
+          </FieldGroup>
 
         <FieldGroup title="UI Preferences">
           <FieldRow label="Auto-refresh">

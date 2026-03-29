@@ -50,7 +50,6 @@ async def test_put_app_settings_syncs_cluster_fields_to_connected_agents():
         settings_json={
             "gameservers_root": r"D:\Ark\BriansPlayground",
             "steamcmd_root": r"D:\Ark\SteamCMD",
-            "cluster_name": "arkSA",
             "auto_refresh_enabled": True,
         }
     )
@@ -71,7 +70,6 @@ async def test_put_app_settings_syncs_cluster_fields_to_connected_agents():
         "fields": {
             "gameservers_root": r"D:\Ark\BriansPlayground",
             "steamcmd_root": r"D:\Ark\SteamCMD",
-            "cluster_name": "arkSA",
         }
     }
     assert row.settings_json == {"auto_refresh_enabled": True}
@@ -136,7 +134,6 @@ async def test_get_app_settings_merges_host_cluster_fields_from_agent():
                         "fields": {
                             "gameservers_root": r"D:\Ark\Servers",
                             "steamcmd_root": r"D:\Ark\SteamCMD",
-                            "cluster_name": "arkSA",
                         }
                     },
                 },
@@ -153,5 +150,4 @@ async def test_get_app_settings_merges_host_cluster_fields_from_agent():
         "auto_refresh_interval_seconds": 3,
         "gameservers_root": r"D:\Ark\Servers",
         "steamcmd_root": r"D:\Ark\SteamCMD",
-        "cluster_name": "arkSA",
     }

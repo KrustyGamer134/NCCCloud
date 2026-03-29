@@ -15,7 +15,7 @@ from db.models import Agent, Instance, PluginCatalog, TenantSettings
 from db.session import get_db
 
 router = APIRouter(tags=["settings"])
-_AGENT_CLUSTER_CONFIG_FIELDS = {"gameservers_root", "steamcmd_root", "cluster_name"}
+_AGENT_CLUSTER_CONFIG_FIELDS = {"gameservers_root", "steamcmd_root"}
 _CLOUD_APP_SETTINGS_FIELDS = {
     "auto_refresh_enabled",
     "auto_refresh_interval_seconds",
