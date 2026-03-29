@@ -40,6 +40,7 @@ class AgentConnection:
         self._admin_api = admin_api
         self._ws = None
         self._send_lock = asyncio.Lock()
+        self._command_tasks: set[asyncio.Task] = set()
         # Public IP is fetched once when connect_loop() starts and reused on
         # every subsequent reconnect.  A fresh process restart re-fetches it.
         self._public_ip: str | None = None
@@ -150,6 +151,7 @@ class AgentConnection:
                 await self._message_loop(ws)
             finally:
                 self._ws = None
+                await self.wait_for_command_tasks()
 
     async def _message_loop(self, ws) -> None:
         """
@@ -177,9 +179,16 @@ class AgentConnection:
             msg_type = msg.get("type", "")
 
             if msg_type == "command":
-                await dispatch_command(msg, self._admin_api, self.send_json)
+                task = asyncio.create_task(dispatch_command(msg, self._admin_api, self.send_json))
+                self._command_tasks.add(task)
+                task.add_done_callback(self._command_tasks.discard)
             else:
                 logger.debug("Ignoring unhandled message type: %r", msg_type)
+
+    async def wait_for_command_tasks(self) -> None:
+        pending = list(self._command_tasks)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     async def _send_heartbeat(self, ws) -> None:
         heartbeat = {"type": "heartbeat", "agent_id": self._settings.agent_id}
