@@ -318,11 +318,7 @@ async def get_plugin_settings(
         select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
     )
     settings_row = settings_result.scalar_one_or_none()
-    plugin_json = _effective_plugin_json(
-        dict(plugin.plugin_json or {}),
-        dict(getattr(settings_row, "settings_json", {}) or {}),
-        plugin_name,
-    )
+    plugin_json = dict(plugin.plugin_json or {})
     return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin_json)
 
 

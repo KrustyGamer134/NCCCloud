@@ -311,7 +311,7 @@ async def test_put_plugin_settings_relays_to_agent_and_keeps_tenant_local_db_mir
 
 
 @pytest.mark.asyncio
-async def test_get_plugin_settings_returns_tenant_local_defaults_without_mutating_catalog():
+async def test_get_plugin_settings_does_not_return_tenant_mirrored_host_defaults_without_explicit_host_selection():
     tenant_id = uuid.uuid4()
     plugin = types.SimpleNamespace(
         plugin_id="ark",
@@ -319,7 +319,7 @@ async def test_get_plugin_settings_returns_tenant_local_defaults_without_mutatin
     )
     settings_row = types.SimpleNamespace(
         tenant_id=tenant_id,
-        settings_json={"plugin_defaults": {"ark": {"display_name": "Tenant Name"}}},
+        settings_json={"plugin_defaults": {"ark": {"display_name": "Tenant Name", "cluster_id": "9999"}}},
     )
 
     db = AsyncMock()
@@ -337,7 +337,7 @@ async def test_get_plugin_settings_returns_tenant_local_defaults_without_mutatin
             db=db,
         )
 
-    assert response.plugin_json["display_name"] == "Tenant Name"
+    assert response.plugin_json["display_name"] == "Catalog Name"
     assert response.plugin_json["cluster_id"] == "1111"
     assert plugin.plugin_json["display_name"] == "Catalog Name"
 

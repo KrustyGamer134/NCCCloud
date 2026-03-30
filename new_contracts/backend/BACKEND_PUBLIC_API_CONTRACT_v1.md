@@ -44,6 +44,7 @@ These may route through approved backend/game-system/agent boundaries:
 - Host-owned operational settings must route through the approved host execution boundary when the host is the authoritative owner.
 - Backend settings reads must not merge host-owned operational settings from an arbitrary connected agent when no specific host target has been selected.
 - Backend tenant-scoped settings reads must not return host-owned operational settings from a cloud-side mirror when no specific host target has been selected.
+- Plugin settings reads must not merge tenant-mirrored host defaults into tenant-level responses when no explicit host target has been selected.
 
 ## 3) Response Rules
 
