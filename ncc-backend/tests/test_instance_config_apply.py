@@ -49,12 +49,14 @@ async def test_put_instance_config_routes_changes_through_agent_apply_path():
         },
     )
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(inst),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.add = MagicMock()
@@ -126,9 +128,17 @@ async def test_put_instance_config_returns_pending_when_agent_is_offline():
         plugin_id="ark",
         config_json={"map": "TheIsland_WP", "game_port": 7777},
     )
+    plugin_catalog = types.SimpleNamespace(plugin_json={})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_scalar_result(inst))
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(inst),
+            _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
+        ]
+    )
     db.add = MagicMock()
     db.flush = AsyncMock()
 
@@ -185,6 +195,7 @@ async def test_put_instance_config_materializes_inherited_defaults_and_derived_s
         side_effect=[
             _scalar_result(inst),
             _scalar_result(plugin_catalog),
+            _scalar_result(types.SimpleNamespace(tenant_id=tenant_id, settings_json={})),
         ]
     )
     db.add = MagicMock()
@@ -240,7 +251,12 @@ async def test_get_plugin_settings_prefers_host_local_fields_when_agent_is_conne
     agent = types.SimpleNamespace(agent_id=agent_id, tenant_id=tenant_id, is_revoked=False)
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_scalar_result(plugin))
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(plugin),
+            _scalar_result(types.SimpleNamespace(tenant_id=tenant_id, settings_json={})),
+        ]
+    )
 
     with patch("api.routes.settings._first_connected_agent_for_tenant", new=AsyncMock(return_value=agent)), patch(
         "api.routes.settings.send_command",
@@ -257,14 +273,20 @@ async def test_get_plugin_settings_prefers_host_local_fields_when_agent_is_conne
 
 
 @pytest.mark.asyncio
-async def test_put_plugin_settings_relays_to_agent_and_keeps_db_mirror():
+async def test_put_plugin_settings_relays_to_agent_and_keeps_tenant_local_db_mirror():
     tenant_id = uuid.uuid4()
     agent_id = uuid.uuid4()
     plugin = types.SimpleNamespace(plugin_id="ark", plugin_json={"display_name": "Old"})
     agent = types.SimpleNamespace(agent_id=agent_id, tenant_id=tenant_id, is_revoked=False)
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_scalar_result(plugin))
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(plugin),
+            _scalar_result(settings_row),
+        ]
+    )
     db.add = MagicMock()
     db.flush = AsyncMock()
 
@@ -283,8 +305,41 @@ async def test_put_plugin_settings_relays_to_agent_and_keeps_db_mirror():
         "plugin_name": "ark",
         "fields": {"display_name": "New"},
     }
-    assert plugin.plugin_json["display_name"] == "New"
+    assert plugin.plugin_json["display_name"] == "Old"
+    assert settings_row.settings_json["plugin_defaults"]["ark"]["display_name"] == "New"
     assert response.plugin_json["display_name"] == "New"
+
+
+@pytest.mark.asyncio
+async def test_get_plugin_settings_returns_tenant_local_defaults_without_mutating_catalog():
+    tenant_id = uuid.uuid4()
+    plugin = types.SimpleNamespace(
+        plugin_id="ark",
+        plugin_json={"display_name": "Catalog Name", "cluster_id": "1111"},
+    )
+    settings_row = types.SimpleNamespace(
+        tenant_id=tenant_id,
+        settings_json={"plugin_defaults": {"ark": {"display_name": "Tenant Name"}}},
+    )
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(plugin),
+            _scalar_result(settings_row),
+        ]
+    )
+
+    with patch("api.routes.settings._first_connected_agent_for_tenant", new=AsyncMock(return_value=None)):
+        response = await get_plugin_settings(
+            plugin_name="ark",
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.plugin_json["display_name"] == "Tenant Name"
+    assert response.plugin_json["cluster_id"] == "1111"
+    assert plugin.plugin_json["display_name"] == "Catalog Name"
 
 
 @pytest.mark.asyncio
@@ -306,6 +361,7 @@ async def test_get_instance_config_prefers_host_local_fields_when_agent_is_conne
         side_effect=[
             _scalar_result(inst),
             _scalar_result(plugin_catalog),
+            _scalar_result(types.SimpleNamespace(tenant_id=tenant_id, settings_json={})),
         ]
     )
 

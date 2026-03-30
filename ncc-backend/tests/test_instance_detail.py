@@ -39,17 +39,24 @@ async def test_get_instance_detail_composes_status_progress_and_logs():
         created_at=None,
     )
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(inst),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     request = types.SimpleNamespace(state=types.SimpleNamespace(user_id="user-1"))
@@ -118,12 +125,14 @@ async def test_get_instance_detail_preserves_section_errors():
         created_at=None,
     )
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(inst),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     request = types.SimpleNamespace(state=types.SimpleNamespace(user_id="user-1"))

@@ -31,6 +31,7 @@ Frontend may submit:
 
 - frontend submits intent only
 - backend is authoritative for routing and validation
+- public frontend reads and writes must use the approved backend surface or same-origin proxy surface, not hardcoded cross-origin browser calls
 - frontend must not encode backend lifecycle rules
 - frontend must not synthesize missing backend responses
 - frontend may edit cloud-owned or host-owned settings only through backend API

@@ -9,11 +9,11 @@ import {
   deleteInstance,
   discoverInstances,
   fetchAgents,
+  fetchInstances,
   fetchPlugins,
+  runInstanceAction,
   type PluginSummary,
 } from "../lib/api";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -217,11 +217,7 @@ export default function InstancesPage() {
   const loadInstances = useCallback(async () => {
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/instances`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`Failed to fetch instances (${res.status})`);
-      setInstances(await res.json());
+      setInstances(await fetchInstances(token!));
       setError(null);
     } catch (e: any) {
       setError(e.message ?? "Unknown error");
@@ -239,11 +235,7 @@ export default function InstancesPage() {
     setPending((p) => ({ ...p, [instanceId]: action }));
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/instances/${instanceId}/${action}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`${action} failed (${res.status})`);
+      await runInstanceAction(token!, instanceId, action);
     } catch (e: any) {
       setError(e.message ?? "Unknown error");
     } finally {

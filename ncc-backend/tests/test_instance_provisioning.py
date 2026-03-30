@@ -29,12 +29,14 @@ async def test_create_instance_provisions_managed_layout_and_allocates_ports():
 
     tenant = types.SimpleNamespace(plan="pro")
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(tenant),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.flush = AsyncMock()
@@ -98,12 +100,14 @@ async def test_create_instance_prefers_plugin_port_defaults_before_allocating():
             "passive_mods": ["123456"],
         }
     )
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(tenant),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.flush = AsyncMock()
@@ -156,12 +160,14 @@ async def test_create_instance_uses_display_name_as_ark_map_when_missing():
 
     tenant = types.SimpleNamespace(plan="pro")
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(tenant),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.flush = AsyncMock()
@@ -209,12 +215,14 @@ async def test_create_instance_surfaces_inner_allocate_ports_error():
 
     tenant = types.SimpleNamespace(plan="pro")
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(tenant),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.flush = AsyncMock()
@@ -270,12 +278,14 @@ async def test_create_instance_uses_nested_allocate_ports_payload():
 
     tenant = types.SimpleNamespace(plan="pro")
     plugin_catalog = types.SimpleNamespace(plugin_json={"name": "ark"})
+    settings_row = types.SimpleNamespace(tenant_id=tenant_id, settings_json={})
 
     db = AsyncMock()
     db.execute = AsyncMock(
         side_effect=[
             _scalar_result(tenant),
             _scalar_result(plugin_catalog),
+            _scalar_result(settings_row),
         ]
     )
     db.flush = AsyncMock()

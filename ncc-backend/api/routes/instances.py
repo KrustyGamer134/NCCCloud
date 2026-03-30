@@ -22,6 +22,7 @@ from db.models import Agent, Instance, PluginCatalog, Tenant, TenantSettings
 from db.session import get_db
 
 router = APIRouter(tags=["instances"])
+_TENANT_PLUGIN_DEFAULTS_KEY = "plugin_defaults"
 
 
 def _plugin_value(plugin_json: dict, key: str, *, server_setting: bool = False):
@@ -34,6 +35,27 @@ def _plugin_value(plugin_json: dict, key: str, *, server_setting: bool = False):
         if isinstance(entry, dict):
             return entry.get("value")
     return None
+
+
+def _tenant_plugin_defaults(settings_json: dict | None) -> dict[str, dict]:
+    if not isinstance(settings_json, dict):
+        return {}
+    raw = settings_json.get(_TENANT_PLUGIN_DEFAULTS_KEY)
+    if not isinstance(raw, dict):
+        return {}
+    defaults: dict[str, dict] = {}
+    for plugin_id, plugin_json in raw.items():
+        if isinstance(plugin_json, dict):
+            defaults[str(plugin_id)] = dict(plugin_json)
+    return defaults
+
+
+def _effective_plugin_json(catalog_plugin_json: dict | None, settings_json: dict | None, plugin_id: str) -> dict:
+    effective = dict(catalog_plugin_json or {})
+    tenant_defaults = _tenant_plugin_defaults(settings_json).get(plugin_id)
+    if tenant_defaults:
+        effective.update(tenant_defaults)
+    return effective
 
 
 def _friendly_map_name(plugin_json: dict, map_name: object) -> str:
@@ -342,7 +364,15 @@ async def _action(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     catalog_row = catalog_result.scalar_one_or_none()
-    plugin_json = catalog_row.plugin_json if catalog_row else {}
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(getattr(catalog_row, "plugin_json", {}) or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        inst.plugin_id,
+    )
 
     result = await send_command(
         agent_id=agent_id_str,
@@ -406,7 +436,15 @@ async def _read_instance_from_agent(
             select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
         )
         catalog_row = catalog_result.scalar_one_or_none()
-        resolved_plugin_json = catalog_row.plugin_json if catalog_row else {}
+        settings_result = await db.execute(
+            select(TenantSettings).where(TenantSettings.tenant_id == inst.tenant_id)
+        )
+        settings_row = settings_result.scalar_one_or_none()
+        resolved_plugin_json = _effective_plugin_json(
+            dict(getattr(catalog_row, "plugin_json", {}) or {}),
+            dict(getattr(settings_row, "settings_json", {}) or {}),
+            inst.plugin_id,
+        )
 
     result = await send_command(
         agent_id=agent_id_str,
@@ -494,11 +532,20 @@ async def list_instances(
             select(PluginCatalog).where(PluginCatalog.plugin_id.in_(plugin_ids))
         )
         plugin_rows = {row.plugin_id: dict(row.plugin_json or {}) for row in plugin_result.scalars().all()}
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    settings_json = dict(getattr(settings_row, "settings_json", {}) or {})
     responses: list[InstanceResponse] = []
     for instance in instances:
         instance.config_json = _effective_instance_config(
             dict(instance.config_json or {}),
-            plugin_rows.get(instance.plugin_id, {}),
+            _effective_plugin_json(
+                plugin_rows.get(instance.plugin_id, {}),
+                settings_json,
+                instance.plugin_id,
+            ),
         )
         responses.append(InstanceResponse.from_orm_safe(instance))
     return responses
@@ -515,7 +562,15 @@ async def get_instance(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
-    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        inst.plugin_id,
+    )
     inst.config_json = _effective_instance_config(
         dict(inst.config_json or {}),
         plugin_json,
@@ -535,7 +590,15 @@ async def get_instance_detail(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
-    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        inst.plugin_id,
+    )
     inst.config_json = _effective_instance_config(
         dict(inst.config_json or {}),
         plugin_json,
@@ -732,7 +795,15 @@ async def create_instance(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     catalog_row = catalog_result.scalar_one_or_none()
-    plugin_json = catalog_row.plugin_json if catalog_row else {}
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(getattr(catalog_row, "plugin_json", {}) or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        inst.plugin_id,
+    )
 
     inst.config_json = await _provision_instance_on_agent(
         inst=inst,

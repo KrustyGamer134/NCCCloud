@@ -9,6 +9,16 @@ function resolveApiUrl(): string {
 
 const API_URL = resolveApiUrl();
 
+async function apiError(res: Response, fallback: string): Promise<Error> {
+  const err = await res.json().catch(() => ({}));
+  return new Error(
+    err?.detail?.error ??
+      err?.detail?.message ??
+      err?.message ??
+      fallback,
+  );
+}
+
 export interface InstanceDetailResponse {
   instance: {
     instance_id: string;
@@ -104,7 +114,7 @@ export async function fetchPlugins(token: string): Promise<PluginSummary[]> {
   const res = await fetch(`${API_URL}/plugins`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error("Failed to fetch plugins");
+  if (!res.ok) throw await apiError(res, "Failed to fetch plugins");
   return res.json();
 }
 
@@ -112,7 +122,7 @@ export async function fetchAppSettings(token: string) {
   const res = await fetch(`${API_URL}/settings/app`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error("Failed to fetch app settings");
+  if (!res.ok) throw await apiError(res, "Failed to fetch app settings");
   return res.json();
 }
 
@@ -125,7 +135,7 @@ export async function saveAppSettings(token: string, settings_json: Record<strin
     },
     body: JSON.stringify({ settings_json }),
   });
-  if (!res.ok) throw new Error("Failed to save app settings");
+  if (!res.ok) throw await apiError(res, "Failed to save app settings");
   return res.json();
 }
 
@@ -133,7 +143,7 @@ export async function fetchPluginSettings(token: string, pluginName: string) {
   const res = await fetch(`${API_URL}/settings/plugins/${encodeURIComponent(pluginName)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Failed to fetch settings for plugin ${pluginName}`);
+  if (!res.ok) throw await apiError(res, `Failed to fetch settings for plugin ${pluginName}`);
   return res.json();
 }
 
@@ -150,7 +160,7 @@ export async function savePluginSettings(
     },
     body: JSON.stringify({ plugin_json }),
   });
-  if (!res.ok) throw new Error(`Failed to save settings for plugin ${pluginName}`);
+  if (!res.ok) throw await apiError(res, `Failed to save settings for plugin ${pluginName}`);
   return res.json();
 }
 
@@ -170,7 +180,7 @@ export async function saveInstanceConfig(
       body: JSON.stringify({ config_json }),
     },
   );
-  if (!res.ok) throw new Error(`Failed to save config for instance ${instanceId}`);
+  if (!res.ok) throw await apiError(res, `Failed to save config for instance ${instanceId}`);
   return res.json();
 }
 
@@ -229,7 +239,7 @@ export async function fetchAgents(token: string) {
   const res = await fetch(`${API_URL}/agents`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error("Failed to fetch agents");
+  if (!res.ok) throw await apiError(res, "Failed to fetch agents");
   return res.json();
 }
 
@@ -237,7 +247,7 @@ export async function fetchInstances(token: string) {
   const res = await fetch(`${API_URL}/instances`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error("Failed to fetch instances");
+  if (!res.ok) throw await apiError(res, "Failed to fetch instances");
   return res.json();
 }
 

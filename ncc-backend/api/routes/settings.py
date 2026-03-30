@@ -23,6 +23,7 @@ _CLOUD_APP_SETTINGS_FIELDS = {
     "auto_scroll_logs",
     "show_confirmation_dialogs",
 }
+_TENANT_PLUGIN_DEFAULTS_KEY = "plugin_defaults"
 _INHERITED_INSTANCE_FIELDS = {
     "display_name",
     "cluster_id",
@@ -34,6 +35,39 @@ _INHERITED_INSTANCE_FIELDS = {
     "auto_update_on_restart",
     "max_players",
 }
+
+
+def _tenant_plugin_defaults(settings_json: dict | None) -> dict[str, dict]:
+    if not isinstance(settings_json, dict):
+        return {}
+    raw = settings_json.get(_TENANT_PLUGIN_DEFAULTS_KEY)
+    if not isinstance(raw, dict):
+        return {}
+    defaults: dict[str, dict] = {}
+    for plugin_id, plugin_json in raw.items():
+        if isinstance(plugin_json, dict):
+            defaults[str(plugin_id)] = dict(plugin_json)
+    return defaults
+
+
+def _effective_plugin_json(catalog_plugin_json: dict | None, settings_json: dict | None, plugin_name: str) -> dict:
+    effective = dict(catalog_plugin_json or {})
+    tenant_defaults = _tenant_plugin_defaults(settings_json).get(plugin_name)
+    if tenant_defaults:
+        effective.update(tenant_defaults)
+    return effective
+
+
+def _updated_tenant_settings_with_plugin_defaults(
+    settings_json: dict | None,
+    plugin_name: str,
+    plugin_json: dict | None,
+) -> dict:
+    next_settings = dict(settings_json or {})
+    defaults = _tenant_plugin_defaults(next_settings)
+    defaults[str(plugin_name)] = dict(plugin_json or {})
+    next_settings[_TENANT_PLUGIN_DEFAULTS_KEY] = defaults
+    return next_settings
 
 
 def _plugin_value(plugin_json: dict, key: str, *, server_setting: bool = False):
@@ -272,7 +306,7 @@ async def put_app_settings(
 
 
 # ---------------------------------------------------------------------------
-# Plugin-level settings (from/to PluginCatalog.plugin_json)
+# Plugin-level settings (catalog metadata + tenant-local defaults)
 # ---------------------------------------------------------------------------
 
 @router.get("/plugins/{plugin_name}", response_model=PluginSettingsResponse)
@@ -290,7 +324,15 @@ async def get_plugin_settings(
             status_code=404,
             detail={"error": "Plugin not found", "code": "NOT_FOUND"},
         )
-    plugin_json = dict(plugin.plugin_json or {})
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(plugin.plugin_json or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        plugin_name,
+    )
     agent = await _first_connected_agent_for_tenant(tenant_id, db)
     if agent is not None:
         result = await send_command(
@@ -328,8 +370,11 @@ async def put_plugin_settings(
             status_code=422,
             detail={"error": "Cluster ID must contain digits only", "code": "VALIDATION_ERROR"},
         )
-    existing_json = dict(plugin.plugin_json or {})
     next_json = dict(body.plugin_json or {})
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
     agent = await _first_connected_agent_for_tenant(tenant_id, db)
     if agent is not None:
         await send_command(
@@ -337,11 +382,26 @@ async def put_plugin_settings(
             command="set-plugin-config-fields",
             payload={"plugin_name": plugin_name, "fields": next_json},
         )
+    existing_json = _effective_plugin_json(
+        dict(plugin.plugin_json or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        plugin_name,
+    )
     existing_json.update(next_json)
-    plugin.plugin_json = existing_json
-    db.add(plugin)
+    if settings_row is None:
+        settings_row = TenantSettings(
+            tenant_id=uuid.UUID(tenant_id),
+            settings_json=_updated_tenant_settings_with_plugin_defaults({}, plugin_name, existing_json),
+        )
+    else:
+        settings_row.settings_json = _updated_tenant_settings_with_plugin_defaults(
+            dict(settings_row.settings_json or {}),
+            plugin_name,
+            existing_json,
+        )
+    db.add(settings_row)
     await db.flush()
-    return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin.plugin_json)
+    return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=existing_json)
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +430,10 @@ async def get_instance_config(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
     config_json = dict(inst.config_json or {})
     if inst.agent_id is not None and is_agent_connected(str(inst.agent_id)):
         agent_result = await send_command(
@@ -385,7 +449,11 @@ async def get_instance_config(
             config_json = dict(effective.get("fields") or {})
     effective_config = _effective_instance_config(
         config_json,
-        dict(getattr(plugin, "plugin_json", {}) or {}),
+        _effective_plugin_json(
+            dict(getattr(plugin, "plugin_json", {}) or {}),
+            dict(getattr(settings_row, "settings_json", {}) or {}),
+            inst.plugin_id,
+        ),
     )
     return InstanceConfigResponse(
         instance_id=str(inst.instance_id),
@@ -417,7 +485,15 @@ async def put_instance_config(
         select(PluginCatalog).where(PluginCatalog.plugin_id == inst.plugin_id)
     )
     plugin = plugin_result.scalar_one_or_none()
-    plugin_json = dict(getattr(plugin, "plugin_json", {}) or {})
+    settings_result = await db.execute(
+        select(TenantSettings).where(TenantSettings.tenant_id == uuid.UUID(tenant_id))
+    )
+    settings_row = settings_result.scalar_one_or_none()
+    plugin_json = _effective_plugin_json(
+        dict(getattr(plugin, "plugin_json", {}) or {}),
+        dict(getattr(settings_row, "settings_json", {}) or {}),
+        inst.plugin_id,
+    )
     if inst.agent_id is not None and is_agent_connected(str(inst.agent_id)):
         agent_current = await send_command(
             agent_id=str(inst.agent_id),
