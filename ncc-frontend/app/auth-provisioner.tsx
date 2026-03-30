@@ -4,7 +4,10 @@ import { useAuth } from "@clerk/nextjs";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.krustystudios.com";
+const API_URL =
+  typeof window !== "undefined"
+    ? "/api/backend"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const ONBOARDING_PATH = "/onboarding";
 
 /**

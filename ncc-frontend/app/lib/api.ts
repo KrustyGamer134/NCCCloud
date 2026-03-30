@@ -1,20 +1,10 @@
 function resolveApiUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (typeof window !== "undefined") {
-    const { hostname, protocol } = window.location;
-    if (hostname === "app.krustystudios.com") {
-      return "https://api.krustystudios.com";
-    }
-    if (configured) {
-      return configured;
-    }
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "http://localhost:8000";
-    }
-    return `${protocol}//${hostname}:8000`;
+    return "/api/backend";
   }
 
-  return configured || "https://api.krustystudios.com";
+  return configured || "http://localhost:8000";
 }
 
 const API_URL = resolveApiUrl();
