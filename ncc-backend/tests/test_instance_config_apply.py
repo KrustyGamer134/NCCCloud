@@ -241,7 +241,7 @@ async def test_put_plugin_settings_rejects_non_numeric_cluster_id():
 
 
 @pytest.mark.asyncio
-async def test_get_plugin_settings_prefers_host_local_fields_when_agent_is_connected():
+async def test_get_plugin_settings_does_not_merge_host_local_fields_from_arbitrary_agent():
     tenant_id = uuid.uuid4()
     agent_id = uuid.uuid4()
     plugin = types.SimpleNamespace(
@@ -268,7 +268,7 @@ async def test_get_plugin_settings_prefers_host_local_fields_when_agent_is_conne
             db=db,
         )
 
-    assert response.plugin_json["display_name"] == "Local Name"
+    assert response.plugin_json["display_name"] == "Cloud Name"
     assert response.plugin_json["cluster_id"] == "1234"
 
 

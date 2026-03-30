@@ -42,6 +42,7 @@ These may route through approved backend/game-system/agent boundaries:
 - Backend may remain authoritative for cloud-owned product settings.
 - Backend may authorize and relay host-owned operational settings, but must not silently redefine itself as the durable authority for those host-owned settings.
 - Host-owned operational settings must route through the approved host execution boundary when the host is the authoritative owner.
+- Backend settings reads must not merge host-owned operational settings from an arbitrary connected agent when no specific host target has been selected.
 
 ## 3) Response Rules
 

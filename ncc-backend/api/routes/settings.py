@@ -333,18 +333,6 @@ async def get_plugin_settings(
         dict(getattr(settings_row, "settings_json", {}) or {}),
         plugin_name,
     )
-    agent = await _first_connected_agent_for_tenant(tenant_id, db)
-    if agent is not None:
-        result = await send_command(
-            agent_id=str(agent.agent_id),
-            command="get-plugin-config-fields",
-            payload={"plugin_name": plugin_name},
-        )
-        effective = _effective_agent_command_data(result)
-        if result.get("status") == "success" and isinstance(effective.get("fields"), dict):
-            merged = dict(plugin_json)
-            merged.update(effective.get("fields") or {})
-            plugin_json = merged
     return PluginSettingsResponse(plugin_id=plugin.plugin_id, plugin_json=plugin_json)
 
 
