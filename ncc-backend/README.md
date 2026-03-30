@@ -118,6 +118,19 @@ python scripts/db_verify.py
 
 Expected output: all six tables listed with 0–1 rows each and the current Alembic revision shown. Any `MISSING ✗` entry means the migration did not apply cleanly — re-run `alembic upgrade head`.
 
+### 8a. Reset a test user's cloud tenant data
+
+To simulate a truly fresh cloud account for a Clerk user, you can preview or delete
+that user's backend tenant data:
+
+```bash
+python scripts/reset_cloud_user.py --email test@example.com
+python scripts/reset_cloud_user.py --user-id user_123 --confirm
+```
+
+This deletes the backend `tenants` row and cascading tenant-scoped cloud data.
+It does not clear host-local agent settings or files on the user's machine.
+
 ### 9. Start the development server
 
 ```bash
