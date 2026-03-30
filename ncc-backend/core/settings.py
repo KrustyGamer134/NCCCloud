@@ -21,11 +21,23 @@ class Settings(BaseSettings):
 
     @property
     def frontend_origins(self) -> list[str]:
-        return [
+        configured = [
             origin.strip()
             for origin in str(self.frontend_url or "").split(",")
             if origin.strip()
         ]
+        required_defaults = [
+            "http://localhost:3000",
+            "https://app.krustystudios.com",
+        ]
+        seen: set[str] = set()
+        origins: list[str] = []
+        for origin in [*configured, *required_defaults]:
+            if origin in seen:
+                continue
+            seen.add(origin)
+            origins.append(origin)
+        return origins
 
 
 settings = Settings()
