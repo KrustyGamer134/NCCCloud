@@ -16,8 +16,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from uuid import UUID
-
 # Allow running from any working directory.
 _here = Path(__file__).resolve().parent.parent
 if str(_here) not in sys.path:
@@ -81,7 +79,7 @@ def _find_user(cur: RealDictCursor, *, email: str | None, user_id: str | None) -
     return cur.fetchone()
 
 
-def _count_rows(cur: RealDictCursor, tenant_id: UUID) -> dict[str, int]:
+def _count_rows(cur: RealDictCursor, tenant_id: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for table in _TENANT_SCOPED_TABLES:
         cur.execute(
@@ -113,7 +111,7 @@ def main() -> int:
             print(f"No backend user found for target: {target}")
             return 1
 
-        tenant_id = UUID(str(user["tenant_id"]))
+        tenant_id = str(user["tenant_id"])
         counts = _count_rows(cur, tenant_id)
 
         print("=" * 60)
