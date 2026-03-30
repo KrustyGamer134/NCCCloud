@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
     # CORS — always allow the frontend origin.
     # In development this defaults to http://localhost:3000.
     # In production set FRONTEND_URL in the backend .env to the deployed frontend domain.
-    origins = [settings.frontend_url]
+    origins = settings.frontend_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
