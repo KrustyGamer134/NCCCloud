@@ -1,11 +1,20 @@
 import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
-import { fetchAgents, fetchInstances } from "../lib/api";
+import { redirect } from "next/navigation";
+import { fetchAgents, fetchAppSettings, fetchInstances } from "../lib/api";
 
 export default async function DashboardPage() {
   const { getToken } = await auth();
   const token = await getToken();
+
+  try {
+    const appSettings = await fetchAppSettings(token!);
+    const gameserversRoot = String(appSettings?.settings_json?.gameservers_root ?? "").trim();
+    if (!gameserversRoot) {
+      redirect("/onboarding");
+    }
+  } catch {}
 
   let agents = [];
   let instances = [];
