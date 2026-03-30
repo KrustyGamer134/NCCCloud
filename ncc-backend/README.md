@@ -131,6 +131,21 @@ python scripts/reset_cloud_user.py --user-id user_123 --confirm
 This deletes the backend `tenants` row and cascading tenant-scoped cloud data.
 It does not clear host-local agent settings or files on the user's machine.
 
+### 8b. Reset local host-side test settings
+
+To clear machine-local settings that can make a new cloud account appear
+prefilled on the same PC, run from the repo root:
+
+```bash
+python scripts/reset_local_host_state.py
+python scripts/reset_local_host_state.py --confirm
+python scripts/reset_local_host_state.py --confirm --include-agent-state
+```
+
+This clears local cluster config, plugin defaults, and dependency cache files.
+It does not delete actual game server installs under your configured
+`gameservers_root`.
+
 ### 9. Start the development server
 
 ```bash
