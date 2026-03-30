@@ -246,14 +246,12 @@ async def put_app_settings(
     if row is None:
         row = TenantSettings(
             tenant_id=uuid.UUID(tenant_id),
-            settings_json=cloud_fields,
+            settings_json={**cloud_fields, **host_fields},
         )
         db.add(row)
     else:
         existing = dict(row.settings_json or {})
-        for key in list(existing.keys()):
-            if key in _AGENT_CLUSTER_CONFIG_FIELDS:
-                existing.pop(key, None)
+        existing.update(host_fields)
         existing.update(cloud_fields)
         row.settings_json = existing
         db.add(row)

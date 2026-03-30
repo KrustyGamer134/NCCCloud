@@ -72,7 +72,11 @@ async def test_put_app_settings_syncs_cluster_fields_to_connected_agents():
             "steamcmd_root": r"D:\Ark\SteamCMD",
         }
     }
-    assert row.settings_json == {"auto_refresh_enabled": True}
+    assert row.settings_json == {
+        "gameservers_root": r"D:\Ark\BriansPlayground",
+        "steamcmd_root": r"D:\Ark\SteamCMD",
+        "auto_refresh_enabled": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -99,6 +103,46 @@ async def test_put_app_settings_skips_agent_sync_when_no_cluster_fields_present(
         )
 
     assert response.settings_json["auto_refresh_enabled"] is True
+    mock_send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_put_app_settings_persists_host_fields_without_connected_agent():
+    tenant_id = uuid.uuid4()
+
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            _scalar_result(None),
+            _scalars_result([]),
+        ]
+    )
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    body = AppSettingsBody(
+        settings_json={
+            "gameservers_root": r"E:\Arktest",
+            "steamcmd_root": r"E:\Arktest\SteamCMD",
+        }
+    )
+
+    with patch("api.routes.settings.send_command", new=AsyncMock()) as mock_send:
+        response = await put_app_settings(
+            body=body,
+            tenant_id=str(tenant_id),
+            db=db,
+        )
+
+    assert response.settings_json == {
+        "gameservers_root": r"E:\Arktest",
+        "steamcmd_root": r"E:\Arktest\SteamCMD",
+    }
+    created_row = db.add.call_args.args[0]
+    assert created_row.settings_json == {
+        "gameservers_root": r"E:\Arktest",
+        "steamcmd_root": r"E:\Arktest\SteamCMD",
+    }
     mock_send.assert_not_called()
 
 
