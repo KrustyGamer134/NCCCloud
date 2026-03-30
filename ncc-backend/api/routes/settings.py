@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import uuid
 import re
@@ -246,16 +246,6 @@ async def get_app_settings(
     row = result.scalar_one_or_none()
     settings_json = dict(row.settings_json or {}) if row else {}
 
-    agent = await _first_connected_agent_for_tenant(tenant_id, db)
-    if agent is not None:
-        cluster_result = await send_command(
-            agent_id=str(agent.agent_id),
-            command="get-cluster-config-fields",
-            payload={"fields": sorted(_AGENT_CLUSTER_CONFIG_FIELDS)},
-        )
-        cluster_data = _effective_agent_command_data(cluster_result)
-        if cluster_result.get("status") == "success" and isinstance(cluster_data.get("fields"), dict):
-            settings_json.update({k: cluster_data["fields"].get(k) for k in _AGENT_CLUSTER_CONFIG_FIELDS})
 
     return AppSettingsResponse(settings_json=settings_json)
 

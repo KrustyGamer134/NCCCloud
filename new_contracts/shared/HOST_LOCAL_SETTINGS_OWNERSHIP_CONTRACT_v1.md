@@ -39,6 +39,7 @@ These are authoritative on the user machine and must be read and written through
 - Users must not receive direct access to cloud-only settings.
 - Host-local settings are scoped to the machine that executes the game-host workload.
 - Hosted settings reads must not source host-local settings from an unspecified or arbitrary machine.
+- Hosted tenant-level settings reads must not expose host-owned values from a cloud-side fallback when no machine has been explicitly selected.
 - Hosted multi-tenant storage must not silently override host-local operational settings once host-local authority is established.
 
 ## 4) Compatibility Rules

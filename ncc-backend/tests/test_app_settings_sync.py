@@ -147,9 +147,8 @@ async def test_put_app_settings_persists_host_fields_without_connected_agent():
 
 
 @pytest.mark.asyncio
-async def test_get_app_settings_merges_host_cluster_fields_from_agent():
+async def test_get_app_settings_does_not_read_host_cluster_fields_without_explicit_host_selection():
     tenant_id = uuid.uuid4()
-    agent_id = uuid.uuid4()
     row = types.SimpleNamespace(
         tenant_id=tenant_id,
         settings_json={
@@ -157,33 +156,11 @@ async def test_get_app_settings_merges_host_cluster_fields_from_agent():
             "auto_refresh_interval_seconds": 3,
         },
     )
-    agent = types.SimpleNamespace(agent_id=agent_id, tenant_id=tenant_id, is_revoked=False)
 
     db = AsyncMock()
-    db.execute = AsyncMock(
-        side_effect=[
-            _scalar_result(row),
-            _scalars_result([agent]),
-        ]
-    )
+    db.execute = AsyncMock(return_value=_scalar_result(row))
 
-    with patch("api.routes.settings.is_agent_connected", return_value=True), patch(
-        "api.routes.settings.send_command",
-        new=AsyncMock(
-            return_value={
-                "status": "success",
-                "data": {
-                    "status": "success",
-                    "data": {
-                        "fields": {
-                            "gameservers_root": r"D:\Ark\Servers",
-                            "steamcmd_root": r"D:\Ark\SteamCMD",
-                        }
-                    },
-                },
-            }
-        ),
-    ):
+    with patch("api.routes.settings.send_command", new=AsyncMock()) as mock_send:
         response = await get_app_settings(
             tenant_id=str(tenant_id),
             db=db,
@@ -192,6 +169,5 @@ async def test_get_app_settings_merges_host_cluster_fields_from_agent():
     assert response.settings_json == {
         "auto_refresh_enabled": True,
         "auto_refresh_interval_seconds": 3,
-        "gameservers_root": r"D:\Ark\Servers",
-        "steamcmd_root": r"D:\Ark\SteamCMD",
     }
+    mock_send.assert_not_called()
